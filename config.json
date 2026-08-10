@@ -1,0 +1,11 @@
+{
+    "SECRET_KEY": "MC-Server-Hub-key-2026",
+    "ADMIN_PASSWORD": "admin123",
+    "MAX_HISTORY": 120,
+    "MAX_API_LOGS": 50,
+    "CHECK_INTERVAL": 60,
+    "DATA_FILE": "./data/data.json",
+    "STATUS_FILE": "./data/Server_status.json",
+    "API_LOG_FILE": "./data/api_response.json",
+    "UPLOAD_DIR": "uploads"
+  }

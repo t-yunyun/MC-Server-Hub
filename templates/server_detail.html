@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务器详情 - MC 游戏大厅</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { mcgreen: '#5D8C47' } } } }
+    </script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .dark .glass {
+            background: rgba(31, 41, 55, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        .status-online {
+            background: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+        }
+
+        .status-offline {
+            background: #ef4444;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen transition-colors duration-300">
+
+    <nav class="glass sticky top-0 z-50 shadow-sm">
+        <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2 hover:opacity-80"><i class="fa-solid fa-arrow-left"></i><span
+                    class="font-bold">返回大厅</span></a>
+            <button onclick="toggleTheme()"
+                class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+                <i class="fa-solid fa-moon dark:hidden"></i><i
+                    class="fa-solid fa-sun hidden dark:block text-yellow-400"></i>
+            </button>
+        </div>
+    </nav>
+
+    <main class="max-w-5xl mx-auto px-4 py-8">
+        <div id="loading" class="text-center py-20 text-gray-500"><i
+                class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i>
+            <p>加载中...</p>
+        </div>
+
+        <div id="content" class="hidden fade-in space-y-6">
+            <!-- 顶部信息卡 -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+                <div class="flex flex-col md:flex-row items-start md:items-center gap-5">
+                    <div id="serverIcon"
+                        class="w-20 h-20 rounded-xl bg-mcgreen/20 flex items-center justify-center text-4xl shrink-0">🎮
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-3 flex-wrap">
+                            <h1 id="serverName" class="text-2xl md:text-3xl font-extrabold"></h1>
+                            <span id="statusBadge" class="px-3 py-1 rounded-full text-sm font-semibold"></span>
+                        </div>
+                        <div class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
+                            <span><i class="fa-solid fa-globe mr-1"></i><span id="serverHost"
+                                    class="font-mono"></span></span>
+                            <span><i class="fa-solid fa-tag mr-1"></i>版本 <span id="serverVersion"></span></span>
+                            <span><i class="fa-solid fa-clock mr-1"></i>延迟 <span id="serverLatency"></span></span>
+                            <span><i class="fa-solid fa-users mr-1"></i>在线 <span id="serverPlayers"></span></span>
+                            <span><i class="fa-solid fa-stopwatch mr-1"></i>上次检测 <span id="lastCheck"></span></span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-2 w-full md:w-auto">
+                        <button id="copyIpBtn"
+                            class="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition text-sm"><i
+                                class="fa-regular fa-copy mr-1"></i>复制 IP</button>
+                        <a id="downloadPackBtn"
+                            class="hidden px-4 py-2 bg-mcgreen text-white rounded-lg hover:bg-green-700 transition text-sm text-center"><i
+                                class="fa-solid fa-download mr-1"></i>下载整合包</a>
+                    </div>
+                </div>
+                <div id="motdBox" class="hidden mt-5 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    <div class="text-xs text-gray-500 mb-1">MOTD</div>
+                    <div id="motdText" class="font-mono whitespace-pre-wrap text-sm"></div>
+                </div>
+                <div id="sampleBox" class="hidden mt-4">
+                    <div class="text-xs text-gray-500 mb-2">当前在线玩家</div>
+                    <div id="sampleList" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div id="keyBox"
+                    class="hidden mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <div class="text-xs text-yellow-700 dark:text-yellow-400 mb-1"><i
+                            class="fa-solid fa-key mr-1"></i>连接密钥</div>
+                    <div class="flex items-center gap-2"><code id="keyText"
+                            class="flex-1 font-mono text-sm break-all"></code><button id="copyKeyBtn"
+                            class="px-2 py-1 text-xs bg-yellow-200 dark:bg-yellow-800 rounded hover:bg-yellow-300">复制</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 状态历史图表 -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+                <h2 class="text-lg font-bold mb-4"><i class="fa-solid fa-chart-line text-mcgreen mr-2"></i>近 2 小时在线状态
+                </h2>
+                <div class="relative h-64"><canvas id="historyChart"></canvas></div>
+            </div>
+
+            <!-- ✅ 额外文件列表 (关联的资源) -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+                <h2 class="text-lg font-bold mb-4"><i class="fa-solid fa-folder-open text-purple-500 mr-2"></i>额外文件</h2>
+                <div id="extraFilesList"></div>
+            </div>
+        </div>
+
+        <div id="errorBox" class="hidden text-center py-20">
+            <i class="fa-solid fa-circle-exclamation text-5xl text-red-500 mb-4"></i>
+            <p id="errorMsg" class="text-gray-600 dark:text-gray-400"></p>
+            <a href="/" class="inline-block mt-4 px-4 py-2 bg-mcgreen text-white rounded-lg">返回大厅</a>
+        </div>
+    </main>
+
+    <div id="toast" class="hidden fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white z-[100] fade-in">
+    </div>
+
+    <script>
+        const pathParts = window.location.pathname.split('/').filter(Boolean);
+        const SID = parseInt(pathParts[pathParts.length - 1]);
+        let serverData = null, historyChart = null;
+
+        function showToast(msg, isError = false) { const t = document.getElementById('toast'); t.textContent = msg; t.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white z-[100] fade-in ${isError ? 'bg-red-500' : 'bg-gray-800'}`; setTimeout(() => t.classList.add('hidden'), 2500); }
+        function copyText(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed; left:-9999px; top:-9999px; opacity:0;';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast('已复制: ' + text);
+                } else {
+                    showToast('复制失败，请手动复制', true);
+                }
+            } catch (err) {
+                showToast('浏览器不支持自动复制', true);
+            }
+            document.body.removeChild(ta);
+        }
+        function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+        if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark');
+        function toggleTheme() { document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light'); if (historyChart) renderChart(); }
+
+        async function loadDetail() {
+            try { const resp = await fetch('/api/server/' + SID); const json = await resp.json(); if (!resp.ok || !json.success) throw new Error(json.msg || '加载失败'); serverData = json.data; render(); }
+            catch (e) { document.getElementById('loading').classList.add('hidden'); document.getElementById('errorBox').classList.remove('hidden'); document.getElementById('errorMsg').textContent = e.message || '服务器不存在'; }
+        }
+
+        function render() {
+            const s = serverData;
+            document.title = `${s.name} - MC 游戏大厅`;
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('content').classList.remove('hidden');
+            if (s.icon) document.getElementById('serverIcon').innerHTML = `<img src="${s.icon}" class="w-full h-full rounded-xl object-cover">`;
+            document.getElementById('serverName').textContent = s.name;
+            document.getElementById('serverHost').textContent = `${s.ip}:${s.port || 25565}`;
+            document.getElementById('serverVersion').textContent = s.version || '-';
+            document.getElementById('serverLatency').textContent = s.is_online ? `${s.latency || 0} ms` : '-';
+            document.getElementById('serverPlayers').textContent = `${s.players_online || 0} / ${s.players_max || 0}`;
+            document.getElementById('lastCheck').textContent = s.last_check_at || '-';
+            const badge = document.getElementById('statusBadge');
+            if (s.is_online) { badge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'; badge.innerHTML = '<span class="status-dot status-online mr-1"></span>在线'; }
+            else { badge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'; badge.innerHTML = '<span class="status-dot status-offline mr-1"></span>离线'; }
+            const host = `${s.ip}:${s.port || 25565}`;
+            document.getElementById('copyIpBtn').onclick = function () {
+                copyText(host);
+            };
+
+            if (s.has_pack) { const btn = document.getElementById('downloadPackBtn'); btn.href = `/api/download/pack/${s.id}`; btn.classList.remove('hidden'); }
+            if (s.motd) { document.getElementById('motdBox').classList.remove('hidden'); document.getElementById('motdText').textContent = s.motd; }
+            if (s.players_sample && s.players_sample.length) { document.getElementById('sampleBox').classList.remove('hidden'); document.getElementById('sampleList').innerHTML = s.players_sample.map(p => `<span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">${esc(p)}</span>`).join(''); }
+            if (s.key) {
+                document.getElementById('copyKeyBtn').onclick = function () {
+                    copyText(s.key);
+                };
+            }
+
+            // ✅ 渲染关联的额外文件
+            renderExtraFiles(s.extra_files_list || []);
+            renderChart();
+        }
+
+        function renderExtraFiles(list) {
+            const box = document.getElementById('extraFilesList');
+            if (!list.length) { box.innerHTML = `<div class="text-gray-500 text-sm">该服务器未配置额外文件</div>`; return; }
+
+            // 这里的 list 是后端组装好的完整资源对象数组
+            box.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${list.map(r => {
+                let btnHtml = '';
+                if (r.has_file) {
+                    btnHtml = `<a href="/api/download/resource/${r.id}" class="px-3 py-1.5 bg-orange-500 text-white rounded text-xs hover:bg-orange-600 transition"><i class="fa-solid fa-download mr-1"></i>下载</a>`;
+                } else if (r.link) {
+                    btnHtml = `<a href="${esc(r.link)}" target="_blank" rel="noopener" class="px-3 py-1.5 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 transition"><i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>外链</a>`;
+                }
+
+                return `<div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+            <div class="min-w-0 flex-1 mr-3">
+                <div class="font-medium truncate">${esc(r.name)}</div>
+                <div class="text-xs text-gray-500">${esc(r.type || '')}</div>
+            </div>
+            <div>${btnHtml}</div>
+        </div>`;
+            }).join('')}</div>`;
+        }
+
+        function renderChart() {
+            const history = serverData.recent_history || [];
+            const labels = history.map(h => { const t = h.time || ''; return t.length >= 16 ? t.substring(11, 16) : t; });
+            const data = history.map(h => h.is_online ? 1 : 0);
+            const isDark = document.documentElement.classList.contains('dark');
+            const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+            const textColor = isDark ? '#cbd5e1' : '#475569';
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            if (historyChart) historyChart.destroy();
+            historyChart = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ label: '在线状态', data, borderColor: '#5D8C47', backgroundColor: 'rgba(93,140,71,0.15)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 4, stepped: false }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.raw === 1 ? '🟢 在线' : '🔴 离线' } } }, scales: { y: { min: 0, max: 1, ticks: { stepSize: 1, color: textColor, callback: v => v === 1 ? '在线' : (v === 0 ? '离线' : '') }, grid: { color: gridColor } }, x: { ticks: { color: textColor, maxTicksLimit: 12, autoSkip: true }, grid: { color: gridColor } } } } });
+        }
+
+        loadDetail();
+        setInterval(loadDetail, 30000);
+    </script>
+</body>
+
+</html>
