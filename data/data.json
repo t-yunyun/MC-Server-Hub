@@ -1,0 +1,14 @@
+{
+  "servers": [
+    {
+      "id": 1,
+      "name": "mc服务器",
+      "ip": "play.example.cn",
+      "port": 25565,
+      "version": "1.21.1",
+      "key": "",
+      "extra_files": [],
+      "pack_filename": ""
+    }
+  ]
+}
