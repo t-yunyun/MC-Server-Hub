@@ -139,7 +139,7 @@ def cleanup_orphan_files():
 
 
 def check_server_status(ip, port=25565):
-    url = f"https://motd.minebbs.com/api/status?ip={ip}"
+    url = f"https://motd.minebbs.com/api/status?ip={ip}&t={int(time.time() * 1000)}"
     if port != 25565:
         url += f"&port={port}"
 
