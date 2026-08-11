@@ -677,6 +677,8 @@ def upload_resource_file(rid):
 # ==================== 启动 ====================
 
 if __name__ == '__main__':
+    host = CFG.get('HOST', '0.0.0.0')
+    port = CFG.get('PORT', 5000)
     init_data()
     cleanup_orphan_files()
     Thread(target=run_check).start()

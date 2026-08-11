@@ -1,4 +1,6 @@
 {
+    "HOST": "0.0.0.0",
+    "PORT": "5000",
     "SECRET_KEY": "MC-Server-Hub-key-2026",
     "ADMIN_PASSWORD": "admin123",
     "MAX_HISTORY": 120,
