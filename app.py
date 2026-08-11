@@ -105,6 +105,39 @@ def init_data():
         save_json(API_LOG_FILE, {"history": []})
 
 
+def cleanup_orphan_files():
+    """启动时自动清理未被 data.json 引用的孤儿文件"""
+    data = load_json(DATA_FILE, {"servers": [], "resources": []})
+    
+    # 1. 清理 uploads/resources 目录
+    # 提取 data.json 中所有正在使用的资源文件名
+    used_resources = {r["file_path"] for r in data.get("resources", []) if r.get("file_path")}
+    res_dir = os.path.join(UPLOAD_DIR, 'resources')
+    if os.path.exists(res_dir):
+        for filename in os.listdir(res_dir):
+            if filename not in used_resources:
+                file_path = os.path.join(res_dir, filename)
+                try:
+                    os.remove(file_path)
+                    print(f"🧹 已清理无用资源文件: {file_path}")
+                except Exception as e:
+                    print(f"⚠️ 清理资源文件失败 {file_path}: {e}")
+
+    # 2. 清理 uploads/packs 目录
+    # 提取 data.json 中所有正在使用的整合包文件名
+    used_packs = {s["pack_filename"] for s in data.get("servers", []) if s.get("pack_filename")}
+    packs_dir = os.path.join(UPLOAD_DIR, 'packs')
+    if os.path.exists(packs_dir):
+        for filename in os.listdir(packs_dir):
+            if filename not in used_packs:
+                file_path = os.path.join(packs_dir, filename)
+                try:
+                    os.remove(file_path)
+                    print(f"🧹 已清理无用整合包文件: {file_path}")
+                except Exception as e:
+                    print(f"⚠️ 清理整合包文件失败 {file_path}: {e}")
+
+
 def check_server_status(ip, port=25565):
     url = f"https://motd.minebbs.com/api/status/?ip={ip}"
     if port != 25565:
@@ -645,6 +678,7 @@ def upload_resource_file(rid):
 
 if __name__ == '__main__':
     init_data()
+    cleanup_orphan_files()
     Thread(target=run_check).start()
     check_thread = Thread(target=schedule_check, daemon=True)
     check_thread.start()
