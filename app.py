@@ -52,7 +52,16 @@ def load_json(filename, default):
     if os.path.exists(filename):
         try:
             with open(filename, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+            
+            # 自动补全缺失的键
+            if filename == DATA_FILE and isinstance(data, dict):
+                if "resources" not in data:
+                    data["resources"] = []
+                    print("⚠️ 检测到 data.json 缺少 resources 字段，已自动补全。")
+                    save_json(filename, data)
+            
+            return data
         except Exception:
             return default
     return default
@@ -64,6 +73,11 @@ def save_json(filename, data):
 
 
 def init_data():
+    #自动创建 DATA_FILE 所在的目录
+    data_dir = os.path.dirname(DATA_FILE)
+    if data_dir and not os.path.exists(data_dir):
+        os.makedirs(data_dir, exist_ok=True)
+    
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(PACKS_DIR, exist_ok=True)
     os.makedirs(RESOURCES_DIR, exist_ok=True)
@@ -78,10 +92,11 @@ def init_data():
                     "port": 25565,
                     "version": "1.21.1",
                     "key": "",
-                    "extra_files": [],  # ✅ 改为存储资源 ID 数组
+                    "extra_files": [],  # 存储资源 ID 数组
                     "pack_filename": ""
                 }
-            ]
+            ],
+            "resources": []
         })
 
     if not os.path.exists(STATUS_FILE):
