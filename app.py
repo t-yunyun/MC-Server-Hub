@@ -227,7 +227,12 @@ def run_check():
                 statuses[sid]["players_sample"] = check_result.get("players_sample", [])
                 statuses[sid]["icon"] = check_result.get("icon", statuses[sid]["icon"])
 
-        statuses[sid]["status_history"].append({"time": now, "is_online": check_result["is_online"]})
+        statuses[sid]["status_history"].append({
+            "time": now,
+            "is_online": check_result["is_online"],
+            "latency": check_result.get("latency", 0),
+            "players_online": check_result.get("players_online", 0)
+        })
         if len(statuses[sid]["status_history"]) > MAX_HISTORY:
             statuses[sid]["status_history"] = statuses[sid]["status_history"][-MAX_HISTORY:]
 
@@ -349,6 +354,32 @@ def get_server_detail(sid):
     server["extra_files_list"] = extra_files_list
     server["has_pack"] = bool(server.get("pack_filename"))
     return jsonify({"success": True, "data": server})
+
+@app.route('/api/server/<int:sid>/metrics')
+def get_server_metrics(sid):
+    """返回详情页状态图所需的历史指标序列（延迟 / 在线玩家数）"""
+    statuses = load_json(STATUS_FILE, {})
+    st = statuses.get(str(sid))
+    if not st:
+        return jsonify({"success": False, "msg": "暂无状态数据"}), 404
+
+    history = st.get("status_history", [])
+    recent = history[max(0, len(history) - MAX_HISTORY):]
+    metrics = []
+    for h in recent:
+        metrics.append({
+            "time": h.get("time", ""),
+            "is_online": bool(h.get("is_online", False)),
+            "latency": h.get("latency", 0),
+            "players_online": h.get("players_online", 0)
+        })
+    return jsonify({
+        "success": True,
+        "data": {
+            "history": metrics,
+            "players_max": st.get("players_max", 0)
+        }
+    })
 
 
 @app.route('/api/download/pack/<int:sid>')
