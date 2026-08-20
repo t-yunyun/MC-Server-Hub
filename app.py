@@ -170,7 +170,7 @@ def check_server_status(ip, port=25565):
             "latency": data.get("delay", 0),
             "players_online": players.get("online", 0),
             "players_max": players.get("max", 0),
-            "players_sample": players.get("sample", "").split(", ") if players.get("sample") else [],
+            "players_sample": sorted(p for p in (players.get("sample") or "").split(", ") if p and p != "无"),
             "icon": data.get("icon", ""),
             "log": result
         }
@@ -231,7 +231,8 @@ def run_check():
             "time": now,
             "is_online": check_result["is_online"],
             "latency": check_result.get("latency", 0),
-            "players_online": check_result.get("players_online", 0)
+            "players_online": check_result.get("players_online", 0),
+            "players_sample": check_result.get("players_sample", [])
         })
         if len(statuses[sid]["status_history"]) > MAX_HISTORY:
             statuses[sid]["status_history"] = statuses[sid]["status_history"][-MAX_HISTORY:]
@@ -371,7 +372,8 @@ def get_server_metrics(sid):
             "time": h.get("time", ""),
             "is_online": bool(h.get("is_online", False)),
             "latency": h.get("latency", 0),
-            "players_online": h.get("players_online", 0)
+            "players_online": h.get("players_online", 0),
+            "players_sample": h.get("players_sample", [])
         })
     return jsonify({
         "success": True,
@@ -482,7 +484,7 @@ def update_server(sid):
                 # ✅ 确保保存的是数组
                 ef = update_data["extra_files"]
                 data["servers"][i]["extra_files"] = ef if isinstance(ef, list) else []
-            for key in ["name", "ip", "port", "version", "key"]:
+            for key in ["name", "ip", "port", "version", "key", "description"]:
                 if key in update_data:
                     data["servers"][i][key] = update_data[key]
             save_json(DATA_FILE, data)

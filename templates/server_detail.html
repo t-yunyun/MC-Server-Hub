@@ -116,6 +116,10 @@
                     <div class="text-xs text-gray-500 mb-2">当前在线玩家</div>
                     <div id="sampleList" class="flex flex-wrap gap-2"></div>
                 </div>
+                <div id="descBox" class="hidden mt-5 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    <div class="text-xs text-gray-500 mb-1">服务器简介</div>
+                    <div id="descText" class="text-sm whitespace-pre-wrap"></div>
+                </div>
                 <div id="keyBox"
                     class="hidden mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                     <div class="text-xs text-yellow-700 dark:text-yellow-400 mb-1"><i
@@ -255,7 +259,8 @@
 
             if (s.has_pack) { const btn = document.getElementById('downloadPackBtn'); btn.href = `/api/download/pack/${s.id}`; btn.classList.remove('hidden'); }
             if (s.motd) { document.getElementById('motdBox').classList.remove('hidden'); document.getElementById('motdText').textContent = s.motd; }
-            if (s.players_sample && s.players_sample.length) { document.getElementById('sampleBox').classList.remove('hidden'); document.getElementById('sampleList').innerHTML = s.players_sample.map(p => `<span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">${esc(p)}</span>`).join(''); }
+            if (s.description) { document.getElementById('descBox').classList.remove('hidden'); document.getElementById('descText').textContent = s.description; }
+            if (s.players_sample && s.players_sample.length) { document.getElementById('sampleBox').classList.remove('hidden'); document.getElementById('sampleList').innerHTML = [...s.players_sample].sort().map(p => `<span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">${esc(p)}</span>`).join(''); }
             if (s.key) {
                 document.getElementById('copyKeyBtn').onclick = function () {
                     copyText(s.key);
@@ -359,7 +364,13 @@
                     formatter: function (params) {
                         var p = params[0];
                         if (!p || p.componentType !== 'series') return '';
-                        return p.name + '<br/>在线玩家: ' + Number(p.value).toFixed(0) + ' 人';
+                        var tip = p.name + '<br/>在线玩家: ' + Number(p.value).toFixed(0) + ' 人';
+                        var h = history[p.dataIndex];
+                        var names = h ? (h.players_sample || []).filter(function (n) { return n && n !== '无'; }).sort() : [];
+                        if (names.length) {
+                            tip += '<br/>玩家: ' + esc(names.join(', '));
+                        }
+                        return tip;
                     }
                 },
                 xAxis: {

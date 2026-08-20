@@ -168,6 +168,7 @@
                                     <th class="p-4 font-semibold">IP:端口</th>
                                     <th class="p-4 font-semibold">版本</th>
                                     <th class="p-4 font-semibold">密钥</th>
+                                    <th class="p-4 font-semibold">简介</th>
                                     <th class="p-4 font-semibold">状态</th>
                                     <th class="p-4 font-semibold text-right">操作</th>
                                 </tr>
@@ -262,6 +263,11 @@
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">连接密钥 (可选)</label>
                     <input type="text" id="sKey" placeholder="留空则不显示"
                         class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">服务器简介 (可选)</label>
+                    <textarea id="sDesc" rows="3" placeholder="留空则不显示，支持换行"
+                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-y"></textarea>
                 </div>
 
                 <!-- ✅ 额外文件选择器 (关联资源库) -->
@@ -521,7 +527,7 @@
 
         function renderServerTable() {
             const tbody = document.getElementById('serverTableBody');
-            if (!servers.length) { tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-500">暂无服务器</td></tr>`; return; }
+            if (!servers.length) { tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-gray-500">暂无服务器</td></tr>`; return; }
             tbody.innerHTML = servers.map(s => {
                 const online = s.is_online;
                 const dotCls = online ? 'status-online' : 'status-offline';
@@ -531,6 +537,7 @@
             <td class="p-4 font-mono text-sm">${esc(s.ip)}:${s.port || 25565}</td>
             <td class="p-4 text-sm">${esc(s.version || '-')}</td>
             <td class="p-4 text-sm text-gray-500">${s.key ? esc(s.key) : '<span class="text-gray-400">-</span>'}</td>
+            <td class="p-4 text-sm text-gray-500 max-w-[14rem]"><div class="truncate" title="${esc(s.description || '')}">${s.description ? esc(s.description) : '<span class="text-gray-400">-</span>'}</div></td>
             <td class="p-4"><span class="status-dot ${dotCls} mr-2"></span>${statusText}</td>
             <td class="p-4 text-right space-x-2 whitespace-nowrap">
                 <button onclick="editServer(${s.id})" class="text-blue-500 hover:text-blue-700 text-sm"><i class="fa-solid fa-pen"></i></button>
@@ -550,6 +557,7 @@
             document.getElementById('sPort').value = server?.port || 25565;
             document.getElementById('sVersion').value = server?.version || '';
             document.getElementById('sKey').value = server?.key || '';
+            document.getElementById('sDesc').value = server?.description || '';
 
             // 渲染资源选择列表
             const listEl = document.getElementById('resSelectList');
@@ -601,6 +609,7 @@
                 port: parseInt(document.getElementById('sPort').value) || 25565,
                 version: document.getElementById('sVersion').value.trim(),
                 key: document.getElementById('sKey').value.trim(),
+                description: document.getElementById('sDesc').value.trim(),
                 extra_files: extraFiles // 传递 ID 数组
             };
 
