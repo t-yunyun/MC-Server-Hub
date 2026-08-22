@@ -153,6 +153,11 @@
                             class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shadow-md">
                             <i class="fa-solid fa-sync mr-1"></i> 立即巡检
                         </button>
+                        <!-- ✅ 测试邮件按钮 -->
+                        <button onclick="sendTestEmail()"
+                            class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition shadow-md">
+                            <i class="fa-solid fa-paper-plane mr-1"></i> 测试邮件
+                        </button>
                         <button onclick="openServerModal()"
                             class="px-4 py-2 bg-mcgreen text-white rounded-lg hover:bg-green-700 transition shadow-md">
                             <i class="fa-solid fa-plus mr-1"></i> 添加服务器
@@ -265,9 +270,36 @@
                         class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">服务器简介 (可选)</label>
-                    <textarea id="sDesc" rows="3" placeholder="留空则不显示，支持换行"
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        服务器简介 (可选)
+                        <span class="text-xs text-gray-400 ml-1">最多 200 字，仅在详情页展示</span>
+                    </label>
+                    <textarea id="sDesc" rows="3" maxlength="200" placeholder="留空则不显示，支持换行"
                         class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-y"></textarea>
+                    <div class="text-right text-xs text-gray-400 mt-1"><span id="sDescCount">0</span>/200</div>
+                </div>
+
+                <!-- ✅ 离线告警配置分组 -->
+                <div class="border-t dark:border-gray-700 pt-4 mt-4">
+                    <div class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                        <i class="fa-solid fa-bell text-orange-500 mr-1"></i>离线告警
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                            告警收件邮箱（多个用逗号或换行分隔，留空则不发提醒）
+                        </label>
+                        <textarea id="sAlertEmails" rows="2" placeholder="admin@example.com, backup@example.com"
+                            class="w-full p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-y"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                            离线阈值（分钟，留空用全局 <span id="globalThresholdHint">60</span> 分钟）
+                        </label>
+                        <input type="number" id="sAlertOfflineMinutes" min="0" placeholder="留空=用全局阈值"
+                            class="w-full p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    </div>
                 </div>
 
                 <!-- ✅ 额外文件选择器 (关联资源库) -->
@@ -374,6 +406,7 @@
         let servers = [];
         let allResources = []; // 管理员视角下的所有资源（含隐藏）
         let publicResources = []; // 玩家视角下的公开资源
+        let CFG_ALERT_OFFLINE_MINUTES = 60; // ✅ 由 loadGlobalConfig 拉取后端值覆盖
 
         async function api(url, options = {}) {
             try {
@@ -430,6 +463,14 @@
             currentUser = data?.is_admin ? 'admin' : null;
             renderAuth(); renderView();
         }
+        async function loadGlobalConfig() {
+            const d = await api('/api/admin/config');
+            if (d?.success) {
+                CFG_ALERT_OFFLINE_MINUTES = d.data.ALERT_OFFLINE_MINUTES || 60;
+                const hintEl = document.getElementById('globalThresholdHint');
+                if (hintEl) hintEl.textContent = CFG_ALERT_OFFLINE_MINUTES;
+            }
+        }
         function renderAuth() {
             const area = document.getElementById('authArea');
             if (currentUser === 'admin') {
@@ -450,7 +491,7 @@
 
         function renderView() {
             const pv = document.getElementById('playerView'), av = document.getElementById('adminView');
-            if (currentUser === 'admin') { pv.classList.add('hidden'); av.classList.remove('hidden'); loadAdminData(); }
+            if (currentUser === 'admin') { pv.classList.add('hidden'); av.classList.remove('hidden'); loadAdminData(); loadGlobalConfig(); }
             else { av.classList.add('hidden'); pv.classList.remove('hidden'); loadPlayerData(); }
         }
 
@@ -532,13 +573,22 @@
                 const online = s.is_online;
                 const dotCls = online ? 'status-online' : 'status-offline';
                 const statusText = online ? `<span class="text-green-600 dark:text-green-400">在线 ${s.players_online || 0}/${s.players_max || 0}</span>` : `<span class="text-red-500">离线</span>`;
+                // ✅ 状态列合并显示告警小铃铛图标（已配置 alert_emails 才显示）
+                const emails = s.alert_emails || [];
+                let alertBadgeHtml = '';
+                if (emails.length > 0) {
+                    const aom = s.alert_offline_minutes;
+                    const threshold = aom != null ? aom : CFG_ALERT_OFFLINE_MINUTES;
+                    const title = `已配置告警：${emails.length} 个收件人 · 离线 ${threshold} 分钟触发`;
+                    alertBadgeHtml = ` <i class="fa-solid fa-bell text-orange-500 text-xs ml-1" title="${esc(title)}"></i>`;
+                }
                 return `<tr class="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750">
             <td class="p-4 font-medium">${esc(s.name)}</td>
             <td class="p-4 font-mono text-sm">${esc(s.ip)}:${s.port || 25565}</td>
             <td class="p-4 text-sm">${esc(s.version || '-')}</td>
             <td class="p-4 text-sm text-gray-500">${s.key ? esc(s.key) : '<span class="text-gray-400">-</span>'}</td>
             <td class="p-4 text-sm text-gray-500 max-w-[14rem]"><div class="truncate" title="${esc(s.description || '')}">${s.description ? esc(s.description) : '<span class="text-gray-400">-</span>'}</div></td>
-            <td class="p-4"><span class="status-dot ${dotCls} mr-2"></span>${statusText}</td>
+            <td class="p-4"><span class="status-dot ${dotCls} mr-2"></span>${statusText}${alertBadgeHtml}</td>
             <td class="p-4 text-right space-x-2 whitespace-nowrap">
                 <button onclick="editServer(${s.id})" class="text-blue-500 hover:text-blue-700 text-sm"><i class="fa-solid fa-pen"></i></button>
                 <button onclick="triggerPackUpload(${s.id})" class="text-purple-500 hover:text-purple-700 text-sm" title="上传整合包"><i class="fa-solid fa-upload"></i></button>
@@ -557,7 +607,14 @@
             document.getElementById('sPort').value = server?.port || 25565;
             document.getElementById('sVersion').value = server?.version || '';
             document.getElementById('sKey').value = server?.key || '';
-            document.getElementById('sDesc').value = server?.description || '';
+            // ✅ 回填 description 并同步字符计数
+            const desc = server?.description || '';
+            const descEl = document.getElementById('sDesc');
+            descEl.value = desc;
+            document.getElementById('sDescCount').textContent = desc.length;
+            // ✅ 回填告警配置
+            document.getElementById('sAlertEmails').value = (server?.alert_emails || []).join(', ');
+            document.getElementById('sAlertOfflineMinutes').value = server?.alert_offline_minutes ?? '';
 
             // 渲染资源选择列表
             const listEl = document.getElementById('resSelectList');
@@ -610,6 +667,12 @@
                 version: document.getElementById('sVersion').value.trim(),
                 key: document.getElementById('sKey').value.trim(),
                 description: document.getElementById('sDesc').value.trim(),
+                // ✅ 告警字段
+                alert_emails: document.getElementById('sAlertEmails').value
+                    .split(/[,，\n]/).map(s => s.trim()).filter(Boolean),
+                alert_offline_minutes: document.getElementById('sAlertOfflineMinutes').value
+                    ? parseInt(document.getElementById('sAlertOfflineMinutes').value)
+                    : null,
                 extra_files: extraFiles // 传递 ID 数组
             };
 
@@ -624,6 +687,11 @@
         function triggerPackUpload(sid) { document.getElementById('packInput_' + sid).click(); }
         async function uploadPack(sid, input) { const f = input.files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); showToast('上传中...'); try { const r = await fetch(`/api/admin/servers/${sid}/upload-pack`, { method: 'POST', body: fd }); const d = await r.json(); if (d.success) { showToast('整合包上传成功'); loadAdminData(); } else showToast(d.msg || '上传失败', true); } catch (e) { showToast('上传失败', true); } input.value = ''; }
         async function manualCheck() { const d = await api('/api/admin/check-now', { method: 'POST' }); if (d?.success) { showToast('已触发巡检'); setTimeout(loadAdminData, 3000); } else showToast(d?.msg || '触发失败', true); }
+        async function sendTestEmail() {
+            const d = await api('/api/admin/test-email', { method: 'POST' });
+            if (d?.success) { showToast('测试邮件已发送：' + d.msg); }
+            else { showToast(d?.msg || '发送失败', true); }
+        }
 
         // ✅ 资源管理表格 (增加隐藏状态列和切换开关)
         function renderResourceTable() {
@@ -723,6 +791,11 @@
 
         checkAuth();
         setInterval(() => { if (currentUser === 'admin') loadAdminData(); else loadPlayerData(); }, 30000);
+
+        // ✅ description textarea 字符计数
+        document.getElementById('sDesc').addEventListener('input', function (e) {
+            document.getElementById('sDescCount').textContent = e.target.value.length;
+        });
     </script>
 </body>
 
