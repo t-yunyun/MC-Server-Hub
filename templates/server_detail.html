@@ -7,8 +7,7 @@
     <title>服务器详情 - MC 游戏大厅</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
-    <script>window.echarts || document.write('<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"><\/script>');</script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { mcgreen: '#5D8C47' } } } }
     </script>
@@ -108,6 +107,10 @@
                                 class="fa-solid fa-download mr-1"></i>下载整合包</a>
                     </div>
                 </div>
+                <div id="descriptionBox" class="hidden mt-5 p-4 bg-mcgreen/10 dark:bg-mcgreen/15 rounded-lg border border-mcgreen/30 dark:border-mcgreen/20">
+                    <div class="text-xs text-mcgreen dark:text-green-400 mb-1"><i class="fa-solid fa-circle-info mr-1"></i>服务器介绍</div>
+                    <div id="descriptionText" class="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 leading-relaxed"></div>
+                </div>
                 <div id="motdBox" class="hidden mt-5 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
                     <div class="text-xs text-gray-500 mb-1">MOTD</div>
                     <div id="motdText" class="font-mono whitespace-pre-wrap text-sm"></div>
@@ -115,10 +118,6 @@
                 <div id="sampleBox" class="hidden mt-4">
                     <div class="text-xs text-gray-500 mb-2">当前在线玩家</div>
                     <div id="sampleList" class="flex flex-wrap gap-2"></div>
-                </div>
-                <div id="descBox" class="hidden mt-5 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                    <div class="text-xs text-gray-500 mb-1">服务器简介</div>
-                    <div id="descText" class="text-sm whitespace-pre-wrap"></div>
                 </div>
                 <div id="keyBox"
                     class="hidden mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
@@ -131,49 +130,13 @@
                 </div>
             </div>
 
-            <!-- 近 2 小时状态（统一面板） -->
+            <!-- 状态历史图表 -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-                <h2 class="text-lg font-bold mb-4"><i class="fa-solid fa-chart-line text-mcgreen mr-2"></i>近 2 小时状态
+                <h2 class="text-lg font-bold mb-4"><i class="fa-solid fa-chart-line text-mcgreen mr-2"></i>近 2 小时在线状态
                 </h2>
-                <div class="space-y-4">
-                    <!-- 平均延迟 -->
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="font-semibold text-sm">平均延迟</span>
-                            <span id="latencyAvg" class="text-sm text-gray-500 dark:text-gray-400">-</span>
-                        </div>
-                        <div id="latencyStrip" class="flex gap-[2px] h-6 w-full"></div>
-                        <div class="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            <span id="latencyRange">-</span>
-                            <span>现在</span>
-                        </div>
-                    </div>
-                    <!-- 当前在线（曲线图） -->
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="font-semibold text-sm">当前在线</span>
-                            <span id="playersNow" class="text-sm text-gray-500 dark:text-gray-400">-</span>
-                        </div>
-                        <div id="playersChart" class="w-full h-28"></div>
-                        <div class="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            <span id="playersRange">-</span>
-                            <span>现在</span>
-                        </div>
-                    </div>
-                    <!-- 在线状态 -->
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="font-semibold text-sm">在线状态</span>
-                            <span id="onlineRate" class="text-sm text-gray-500 dark:text-gray-400">-</span>
-                        </div>
-                        <div id="statusStrip" class="flex gap-[2px] h-6 w-full"></div>
-                        <div class="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            <span id="stripRange">-</span>
-                            <span>现在</span>
-                        </div>
-                    </div>
-                </div>
+                <div class="relative h-64"><canvas id="historyChart"></canvas></div>
             </div>
+
             <!-- ✅ 额外文件列表 (关联的资源) -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
                 <h2 class="text-lg font-bold mb-4"><i class="fa-solid fa-folder-open text-purple-500 mr-2"></i>额外文件</h2>
@@ -194,8 +157,7 @@
     <script>
         const pathParts = window.location.pathname.split('/').filter(Boolean);
         const SID = parseInt(pathParts[pathParts.length - 1]);
-        let serverData = null;
-        let playersChart = null, lastHistory = [], lastPlayersMax = 0;
+        let serverData = null, historyChart = null;
 
         function showToast(msg, isError = false) { const t = document.getElementById('toast'); t.textContent = msg; t.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white z-[100] fade-in ${isError ? 'bg-red-500' : 'bg-gray-800'}`; setTimeout(() => t.classList.add('hidden'), 2500); }
         function copyText(text) {
@@ -219,21 +181,10 @@
         }
         function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
         if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark');
-        function toggleTheme() { document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light'); if (playersChart) renderPlayersChart(); }
-
-        async function loadMetrics() {
-            try {
-                const resp = await fetch('/api/server/' + SID + '/metrics');
-                if (!resp.ok) return;
-                const json = await resp.json();
-                if (json.success && json.data) {
-                    renderStatusBoard(json.data.history || [], json.data.players_max || 0);
-                }
-            } catch (e) { console.error('metrics 加载失败:', e); }
-        }
+        function toggleTheme() { document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light'); if (historyChart) renderChart(); }
 
         async function loadDetail() {
-            try { const resp = await fetch('/api/server/' + SID); const json = await resp.json(); if (!resp.ok || !json.success) throw new Error(json.msg || '加载失败'); serverData = json.data; loadMetrics(); render(); }
+            try { const resp = await fetch('/api/server/' + SID); const json = await resp.json(); if (!resp.ok || !json.success) throw new Error(json.msg || '加载失败'); serverData = json.data; render(); }
             catch (e) { document.getElementById('loading').classList.add('hidden'); document.getElementById('errorBox').classList.remove('hidden'); document.getElementById('errorMsg').textContent = e.message || '服务器不存在'; }
         }
 
@@ -258,9 +209,10 @@
             };
 
             if (s.has_pack) { const btn = document.getElementById('downloadPackBtn'); btn.href = `/api/download/pack/${s.id}`; btn.classList.remove('hidden'); }
+            // ✅ 服务器描述（管理员手填，独立于 MOTD）
+            if (s.description) { document.getElementById('descriptionBox').classList.remove('hidden'); document.getElementById('descriptionText').textContent = s.description; }
             if (s.motd) { document.getElementById('motdBox').classList.remove('hidden'); document.getElementById('motdText').textContent = s.motd; }
-            if (s.description) { document.getElementById('descBox').classList.remove('hidden'); document.getElementById('descText').textContent = s.description; }
-            if (s.players_sample && s.players_sample.length) { document.getElementById('sampleBox').classList.remove('hidden'); document.getElementById('sampleList').innerHTML = [...s.players_sample].sort().map(p => `<span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">${esc(p)}</span>`).join(''); }
+            if (s.players_sample && s.players_sample.length) { document.getElementById('sampleBox').classList.remove('hidden'); document.getElementById('sampleList').innerHTML = s.players_sample.map(p => `<span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">${esc(p)}</span>`).join(''); }
             if (s.key) {
                 document.getElementById('copyKeyBtn').onclick = function () {
                     copyText(s.key);
@@ -269,7 +221,7 @@
 
             // ✅ 渲染关联的额外文件
             renderExtraFiles(s.extra_files_list || []);
-            renderStatusBoard(serverData.recent_history || [], serverData.players_max || 0);
+            renderChart();
         }
 
         function renderExtraFiles(list) {
@@ -295,121 +247,17 @@
             }).join('')}</div>`;
         }
 
-        function renderLatencyStrip() {
-            const history = lastHistory;
-            const strip = document.getElementById('latencyStrip');
-            const avg = document.getElementById('latencyAvg');
-            const range = document.getElementById('latencyRange');
-            if (!history.length) {
-                strip.innerHTML = '<div class="w-full text-sm text-gray-400">暂无数据</div>';
-                avg.textContent = '-';
-                range.textContent = '-';
-                return;
-            }
-            const onlineVals = history.filter(h => h.is_online).map(h => Number(h.latency) || 0);
-            avg.textContent = onlineVals.length ? Math.round(onlineVals.reduce((a, b) => a + b, 0) / onlineVals.length) + ' ms' : '-';
-            range.textContent = (history[0].time || '').substring(11, 16);
-            const maxLat = Math.max.apply(null, onlineVals.concat([100]));
-            strip.innerHTML = history.map(h => {
-                if (!h.is_online) return '<div class="flex-1 min-w-0 h-full rounded-[3px] bg-gray-200 dark:bg-gray-700" title="' + esc(h.time) + ' 离线"></div>';
-                const v = Number(h.latency) || 0;
-                const level = v <= maxLat / 3 ? 'bg-[#22a55b]' : (v <= maxLat * 2 / 3 ? 'bg-yellow-400' : 'bg-red-400');
-                return '<div class="flex-1 min-w-0 h-full rounded-[3px] ' + level + '" title="' + esc(h.time) + ' ' + v + 'ms"></div>';
-            }).join('');
-        }
-
-        function renderStatusStrip() {
-            const history = lastHistory;
-            const strip = document.getElementById('statusStrip');
-            const rate = document.getElementById('onlineRate');
-            const range = document.getElementById('stripRange');
-            if (!history.length) {
-                strip.innerHTML = '<div class="w-full text-sm text-gray-400">暂无状态数据</div>';
-                rate.textContent = '-';
-                range.textContent = '-';
-                return;
-            }
-            const onlineCount = history.filter(h => h.is_online).length;
-            rate.textContent = Math.round(onlineCount / history.length * 100) + '%';
-            range.textContent = (history[0].time || '').substring(11, 16);
-            strip.innerHTML = history.map(h => `<div class="flex-1 min-w-0 h-full rounded-[3px] ${h.is_online ? 'bg-[#22a55b]' : 'bg-red-400'}" title="${esc(h.time)} ${h.is_online ? '在线' : '离线'}"></div>`).join('');
-        }
-
-        function renderPlayersChart() {
-            const history = lastHistory;
-            const now = document.getElementById('playersNow');
-            const range = document.getElementById('playersRange');
-            const el = document.getElementById('playersChart');
-            if (!history.length) {
-                el.innerHTML = '<div class="w-full h-full flex items-center justify-center text-sm text-gray-400">暂无数据</div>';
-                now.textContent = '-';
-                range.textContent = '-';
-                return;
-            }
-            const last = history[history.length - 1];
-            now.textContent = (Number(last.players_online) || 0) + (lastPlayersMax ? ' / ' + lastPlayersMax : '');
-            range.textContent = (history[0].time || '').substring(11, 16);
-            const labels = history.map(h => (h.time || '').substring(11, 16));
-            const data = history.map(h => Number(h.players_online) || 0);
+        function renderChart() {
+            const history = serverData.recent_history || [];
+            const labels = history.map(h => { const t = h.time || ''; return t.length >= 16 ? t.substring(11, 16) : t; });
+            const data = history.map(h => h.is_online ? 1 : 0);
             const isDark = document.documentElement.classList.contains('dark');
-            const textColor = isDark ? '#cbd5e1' : '#475569';
             const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-            if (playersChart) playersChart.dispose();
-            playersChart = echarts.init(el);
-            playersChart.setOption({
-                animation: false,
-                grid: { left: 34, right: 12, top: 10, bottom: 22 },
-                tooltip: {
-                    trigger: 'axis',
-                    formatter: function (params) {
-                        var p = params[0];
-                        if (!p || p.componentType !== 'series') return '';
-                        var tip = p.name + '<br/>在线玩家: ' + Number(p.value).toFixed(0) + ' 人';
-                        var h = history[p.dataIndex];
-                        var names = h ? (h.players_sample || []).filter(function (n) { return n && n !== '无'; }).sort() : [];
-                        if (names.length) {
-                            tip += '<br/>玩家: ' + esc(names.join(', '));
-                        }
-                        return tip;
-                    }
-                },
-                xAxis: {
-                    type: 'category',
-                    data: labels,
-                    boundaryGap: false,
-                    axisLabel: { color: textColor, fontSize: 10, interval: Math.max(1, Math.floor(labels.length / 6) - 1) },
-                    axisLine: { lineStyle: { color: gridColor } },
-                    axisTick: { show: false }
-                },
-                yAxis: {
-                    type: 'value',
-                    minInterval: 1,
-                    max: lastPlayersMax > 0 ? Math.max(lastPlayersMax, Math.max.apply(null, data)) : undefined,
-                    axisLabel: { color: textColor, fontSize: 10 },
-                    splitLine: { lineStyle: { color: gridColor } }
-                },
-                series: [{
-                    name: '在线玩家',
-                    type: 'line',
-                    data: data,
-                    smooth: true,
-                    symbol: 'none',
-                    itemStyle: { color: '#5D8C47' },
-                    lineStyle: { color: '#5D8C47', width: 2 },
-                    areaStyle: { color: 'rgba(93,140,71,0.15)' }
-                }]
-            });
+            const textColor = isDark ? '#cbd5e1' : '#475569';
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            if (historyChart) historyChart.destroy();
+            historyChart = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ label: '在线状态', data, borderColor: '#5D8C47', backgroundColor: 'rgba(93,140,71,0.15)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 4, stepped: false }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.raw === 1 ? '🟢 在线' : '🔴 离线' } } }, scales: { y: { min: 0, max: 1, ticks: { stepSize: 1, color: textColor, callback: v => v === 1 ? '在线' : (v === 0 ? '离线' : '') }, grid: { color: gridColor } }, x: { ticks: { color: textColor, maxTicksLimit: 12, autoSkip: true }, grid: { color: gridColor } } } } });
         }
-
-        function renderStatusBoard(history, playersMax) {
-            lastHistory = history || [];
-            lastPlayersMax = playersMax || 0;
-            renderLatencyStrip();
-            renderStatusStrip();
-            renderPlayersChart();
-        }
-
-        window.addEventListener('resize', function () { if (playersChart) playersChart.resize(); });
 
         loadDetail();
         setInterval(loadDetail, 30000);

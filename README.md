@@ -39,6 +39,14 @@
 | `STATUS_FILE`    | String  | `./data/Server_status.json` | 服务器实时状态缓存文件，存储在线人数、延迟、MOTD 等巡检结果。                                      |
 | `API_LOG_FILE`   | String  | `./data/api_response.json`  | API 请求日志存储文件，用于排查巡检失败问题。                                               |
 | `UPLOAD_DIR`     | String  | `uploads`                   | 文件上传根目录。整合包将存储于 `{UPLOAD_DIR}/packs`，资源文件存储于 `{UPLOAD_DIR}/resources`。 |
+| `ALERT_ENABLED` | Boolean | `true` | 是否启用离线告警邮件功能。设为 `false` 时，巡检不会发送任何告警邮件，仅记录状态。 |
+| `ALERT_OFFLINE_MINUTES` | Integer | `60` | 服务器离线多久后触发告警邮件（单位：分钟）。服务器级 `alert_offline_minutes` 字段可覆盖此全局值。 |
+| `SMTP_HOST` | String | `smtp.qq.com` | SMTP 服务器地址。常见：QQ 邮箱 `smtp.qq.com`、网易 `smtp.163.com`、Gmail `smtp.gmail.com`。 |
+| `SMTP_PORT` | Integer | `465` | SMTP 服务器端口。SSL 直连通常为 `465`，STARTTLS 通常为 `587`，需与 `SMTP_USE_SSL` 配套使用。 |
+| `SMTP_USER` | String | `your_email@qq.com` | SMTP 登录账号（即发件邮箱地址），同时默认作为告警邮件的收件人之一。 |
+| `SMTP_PASSWORD` | String | `your_auth_code` | SMTP 登录授权码（**不是邮箱登录密码**）。QQ/网易等邮箱需在设置中开启 SMTP 服务并生成授权码。**部署前请务必修改**。 |
+| `SMTP_FROM` | String | `your_email@qq.com` | 实际显示的发件人地址。留空时默认使用 `SMTP_USER`。 |
+| `SMTP_USE_SSL` | Boolean | `true` | 是否使用 SSL 直连。`true` 走 `SMTP_SSL`（建议端口 `465`），`false` 走 `SMTP` + `STARTTLS`（建议端口 `587`）。 |
 
 ---
 

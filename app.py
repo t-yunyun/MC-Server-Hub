@@ -1,142 +1,46 @@
+import os
 from flask import Flask, render_template, request, jsonify, session, send_file, make_response
 import requests
-import json
-import os
-import re
 import time
 from datetime import datetime
 from threading import Thread
 from urllib.parse import quote
 
-#项目配置
-CONFIG_FILE = 'config.json'
-
-def load_config():
-    with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-CFG = load_config()
-
+import file_store
+import alert_email as email_module
+from config import (
+    SECRET_KEY,
+    ADMIN_PASSWORD,
+    DATA_FILE,
+    STATUS_FILE,
+    API_LOG_FILE,
+    PACKS_DIR,
+    RESOURCES_DIR,
+    MAX_HISTORY,
+    MAX_API_LOGS,
+    CHECK_INTERVAL,
+    ALLOWED_PACK_EXTENSIONS,
+    ALLOWED_RESOURCE_EXTENSIONS,
+    HOST,
+    PORT,
+    ALERT_ENABLED,
+    ALERT_OFFLINE_MINUTES,
+    SMTP_HOST,
+    SMTP_PORT,
+    SMTP_USER,
+    SMTP_USE_SSL,
+)
+from file_store import (
+    load_json,
+    save_json,
+    safe_keep_filename,
+)
 
 app = Flask(__name__)
-app.secret_key = CFG['SECRET_KEY']
-ADMIN_PASSWORD = CFG['ADMIN_PASSWORD']
-
-MAX_HISTORY = CFG['MAX_HISTORY']
-MAX_API_LOGS = CFG['MAX_API_LOGS']
-DATA_FILE = CFG['DATA_FILE']
-STATUS_FILE = CFG['STATUS_FILE']
-API_LOG_FILE = CFG['API_LOG_FILE']
-CHECK_INTERVAL = CFG['CHECK_INTERVAL']
-UPLOAD_DIR = CFG['UPLOAD_DIR']
-PACKS_DIR = os.path.join(UPLOAD_DIR, 'packs')
-RESOURCES_DIR = os.path.join(UPLOAD_DIR, 'resources')
-
-ALLOWED_PACK_EXTENSIONS = {'zip', 'rar', '7z', 'tar', 'gz', 'jar', 'xz', 'bz2', 'lz'}
-ALLOWED_RESOURCE_EXTENSIONS = {
-    'zip', 'rar', '7z', 'tar', 'gz', 'jar',
-    'png', 'jpg', 'jpeg', 'pdf', 'txt',
-    'json', 'cfg', 'config'
-}
+app.secret_key = SECRET_KEY
 
 
-def safe_keep_filename(filename):
-    filename = os.path.basename(filename)
-    filename = re.sub(r'[\\/*?:"<>|]', '_', filename)
-    if filename.startswith('.'):
-        filename = '_' + filename
-    return filename or 'unnamed_file'
-
-
-def load_json(filename, default):
-    if os.path.exists(filename):
-        try:
-            with open(filename, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            # 自动补全缺失的键
-            if filename == DATA_FILE and isinstance(data, dict):
-                if "resources" not in data:
-                    data["resources"] = []
-                    print("⚠️ 检测到 data.json 缺少 resources 字段，已自动补全。")
-                    save_json(filename, data)
-            
-            return data
-        except Exception:
-            return default
-    return default
-
-
-def save_json(filename, data):
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-def init_data():
-    #自动创建 DATA_FILE 所在的目录
-    data_dir = os.path.dirname(DATA_FILE)
-    if data_dir and not os.path.exists(data_dir):
-        os.makedirs(data_dir, exist_ok=True)
-    
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    os.makedirs(PACKS_DIR, exist_ok=True)
-    os.makedirs(RESOURCES_DIR, exist_ok=True)
-
-    if not os.path.exists(DATA_FILE):
-        save_json(DATA_FILE, {
-            "servers": [
-                {
-                    "id": 1,
-                    "name": "mc服务器",
-                    "ip": "play.example.cn",
-                    "port": 25565,
-                    "version": "1.21.1",
-                    "key": "",
-                    "extra_files": [],  # 存储资源 ID 数组
-                    "pack_filename": ""
-                }
-            ],
-            "resources": []
-        })
-
-    if not os.path.exists(STATUS_FILE):
-        save_json(STATUS_FILE, {})
-    if not os.path.exists(API_LOG_FILE):
-        save_json(API_LOG_FILE, {"history": []})
-
-
-def cleanup_orphan_files():
-    """启动时自动清理未被 data.json 引用的孤儿文件"""
-    data = load_json(DATA_FILE, {"servers": [], "resources": []})
-    
-    # 1. 清理 uploads/resources 目录
-    # 提取 data.json 中所有正在使用的资源文件名
-    used_resources = {r["file_path"] for r in data.get("resources", []) if r.get("file_path")}
-    res_dir = os.path.join(UPLOAD_DIR, 'resources')
-    if os.path.exists(res_dir):
-        for filename in os.listdir(res_dir):
-            if filename not in used_resources:
-                file_path = os.path.join(res_dir, filename)
-                try:
-                    os.remove(file_path)
-                    print(f"🧹 已清理无用资源文件: {file_path}")
-                except Exception as e:
-                    print(f"⚠️ 清理资源文件失败 {file_path}: {e}")
-
-    # 2. 清理 uploads/packs 目录
-    # 提取 data.json 中所有正在使用的整合包文件名
-    used_packs = {s["pack_filename"] for s in data.get("servers", []) if s.get("pack_filename")}
-    packs_dir = os.path.join(UPLOAD_DIR, 'packs')
-    if os.path.exists(packs_dir):
-        for filename in os.listdir(packs_dir):
-            if filename not in used_packs:
-                file_path = os.path.join(packs_dir, filename)
-                try:
-                    os.remove(file_path)
-                    print(f"🧹 已清理无用整合包文件: {file_path}")
-                except Exception as e:
-                    print(f"⚠️ 清理整合包文件失败 {file_path}: {e}")
-
+# ==================== 巡检 ====================
 
 def check_server_status(ip, port=25565):
     url = f"https://motd.minebbs.com/api/status?ip={ip}&t={int(time.time() * 1000)}"
@@ -238,6 +142,8 @@ def run_check():
             statuses[sid]["status_history"] = statuses[sid]["status_history"][-MAX_HISTORY:]
 
     save_json(STATUS_FILE, statuses)
+    # ✅ 离线检测由 app.py 负责：触发告警判定并调用 email 模块发送
+    check_alerts(data, statuses)
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ 巡检完成，共检查 {len(data['servers'])} 台服务器")
 
 
@@ -248,6 +154,93 @@ def schedule_check():
         except Exception as e:
             print(f"巡检出错: {e}")
         time.sleep(CHECK_INTERVAL)
+
+
+# ==================== 离线告警状态机（由 app.py 检测，调用 email 模块发送） ====================
+
+def get_effective_threshold(server):
+    """返回服务器有效离线阈值（分钟）。
+    服务器级覆盖优先；为 None 或缺失时用全局 ALERT_OFFLINE_MINUTES。
+    全局也未配置时用默认 60 分钟。
+    """
+    per = server.get("alert_offline_minutes")
+    if per is not None:
+        return per
+    return ALERT_OFFLINE_MINUTES
+
+
+def check_alerts(data, statuses):
+    """巡检后调用：按状态机更新告警字段并触发邮件。
+
+    data: data.json dict（含 servers 列表）
+    statuses: Server_status.json dict（key 为 str(sid)）
+    """
+    if not ALERT_ENABLED:
+        return
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_ts = time.time()
+    dirty = False
+
+    for s in data["servers"]:
+        sid_str = str(s["id"])
+        st = statuses.get(sid_str)
+        if not st:
+            continue
+
+        # 兜底旧数据
+        st.setdefault("offline_since", None)
+        st.setdefault("alert_sent", False)
+
+        emails = s.get("alert_emails", [])
+        threshold_min = get_effective_threshold(s)
+
+        # ===== 在线分支：清空状态 =====
+        if st.get("is_online"):
+            if st.get("offline_since") is not None or st.get("alert_sent"):
+                st["offline_since"] = None
+                st["alert_sent"] = False
+                dirty = True
+            continue
+
+        # ===== 离线分支 =====
+        if st.get("offline_since") is None:
+            # 首次离线，记录起点
+            st["offline_since"] = now_str
+            st["alert_sent"] = False
+            dirty = True
+            continue
+
+        # 已记录起点，判断是否超阈值
+        try:
+            offline_ts = datetime.strptime(
+                st["offline_since"], "%Y-%m-%d %H:%M:%S"
+            ).timestamp()
+        except (ValueError, TypeError):
+            # 时间格式异常，重新置为当前时间
+            st["offline_since"] = now_str
+            st["alert_sent"] = False
+            dirty = True
+            continue
+
+        offline_min = (now_ts - offline_ts) / 60
+
+        if offline_min >= threshold_min and not st.get("alert_sent"):
+            if emails:
+                Thread(
+                    target=email_module.send_alert_email,
+                    args=(s, st, list(emails)),
+                    name=f"alert-{s['id']}"
+                ).start()
+            st["alert_sent"] = True
+            dirty = True
+        elif offline_min < threshold_min and st.get("alert_sent"):
+            # 容错：未超阈值却已标记，重置
+            st["alert_sent"] = False
+            dirty = True
+
+    if dirty:
+        save_json(STATUS_FILE, statuses)
 
 
 # ==================== 页面路由 ====================
@@ -293,13 +286,13 @@ def get_resources():
     data = load_json(DATA_FILE, {"servers": [], "resources": []})
     resources = data.get("resources", [])
     is_admin = session.get("is_admin", False)
-    
+
     result = []
     for r in resources:
         # 如果不是管理员且资源被隐藏，则跳过
         if not is_admin and r.get("hidden", False):
             continue
-            
+
         r_data = dict(r)
         r_data["has_file"] = bool(r.get("file_path"))
         r_data["original_filename"] = r.get("original_filename", "")
@@ -341,17 +334,17 @@ def get_server_detail(sid):
     ef_ids = server.get("extra_files", [])
     if not isinstance(ef_ids, list):
         ef_ids = []
-        
+
     all_resources = data.get("resources", [])
     res_map = {r["id"]: r for r in all_resources}
-    
+
     extra_files_list = []
     for rid in ef_ids:
         if rid in res_map:
             r = dict(res_map[rid])
             r["has_file"] = bool(r.get("file_path"))
             extra_files_list.append(r)
-            
+
     server["extra_files_list"] = extra_files_list
     server["has_pack"] = bool(server.get("pack_filename"))
     return jsonify({"success": True, "data": server})
@@ -444,6 +437,22 @@ def admin_logout():
 @app.route('/api/admin/check')
 def admin_check():
     return jsonify({"is_admin": session.get("is_admin", False)})
+
+
+@app.route('/api/admin/config')
+def admin_config():
+    """返回前端需要的全局告警/SMTP 概览配置（不暴露 SMTP_PASSWORD 等敏感字段）。"""
+    return jsonify({
+        "success": True,
+        "data": {
+            "ALERT_ENABLED": ALERT_ENABLED,
+            "ALERT_OFFLINE_MINUTES": ALERT_OFFLINE_MINUTES,
+            "SMTP_HOST": SMTP_HOST,
+            "SMTP_PORT": SMTP_PORT,
+            "SMTP_USER": SMTP_USER,
+            "SMTP_USE_SSL": SMTP_USE_SSL,
+        }
+    })
 
 
 @app.route('/api/admin/check-now', methods=['POST'])
@@ -636,7 +645,7 @@ def update_resource(rid):
             # 允许更新名称和类型（如果需要的话）
             if "name" in update_data: data["resources"][i]["name"] = update_data["name"]
             if "type" in update_data: data["resources"][i]["type"] = update_data["type"]
-            
+
             save_json(DATA_FILE, data)
             return jsonify({"success": True, "data": data["resources"][i]})
     return jsonify({"success": False, "msg": "资源不存在"}), 404
@@ -653,13 +662,13 @@ def delete_resource(rid):
             if os.path.exists(fpath):
                 os.remove(fpath)
             break
-            
+
     # ✅ 删除资源时，同时从所有服务器的 extra_files 中移除该 ID
     for s in data["servers"]:
         if "extra_files" in s and isinstance(s["extra_files"], list):
             if rid in s["extra_files"]:
                 s["extra_files"].remove(rid)
-                
+
     data["resources"] = [r for r in data["resources"] if r["id"] != rid]
     save_json(DATA_FILE, data)
     return jsonify({"success": True})
@@ -707,17 +716,27 @@ def upload_resource_file(rid):
     return jsonify({"success": False, "msg": "资源不存在"}), 404
 
 
+# ==================== 邮件测试 ====================
+
+@app.route('/api/admin/test-email', methods=['POST'])
+def test_email():
+    """手动触发 SMTP 测试邮件发送（管理员）。"""
+    if not session.get("is_admin"):
+        return jsonify({"success": False, "msg": "未授权"}), 403
+    ok, msg = email_module.send_test_email()
+    return jsonify({"success": ok, "msg": msg})
+
+
 # ==================== 启动 ====================
 
 if __name__ == '__main__':
-    host = CFG.get('HOST', '0.0.0.0')
-    port = CFG.get('PORT', 5000)
-    init_data()
-    cleanup_orphan_files()
+    file_store.init_data()
+    file_store.cleanup_orphan_files()
+    email_module.check_smtp_config()
     Thread(target=run_check).start()
     check_thread = Thread(target=schedule_check, daemon=True)
     check_thread.start()
-    print(f"✅ MC服务器大厅已启动: http://127.0.0.1:{port}")
+    print(f"✅ MC服务器大厅已启动: http://127.0.0.1:{PORT}")
     print(f"🔑 管理员密码: {ADMIN_PASSWORD}")
     print(f"⏱️  巡检间隔: {CHECK_INTERVAL}秒，保存最近{MAX_HISTORY}条历史")
-    app.run(host=host, port=port, debug=False)
+    app.run(host=HOST, port=PORT, debug=False)
