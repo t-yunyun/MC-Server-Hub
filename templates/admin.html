@@ -29,6 +29,51 @@
             background: rgba(93, 140, 71, 0.2);
             border-color: #5D8C47;
         }
+
+        /* ===== 服务器拖拽排序样式 ===== */
+        #serverTableBody tr[draggable="true"] {
+            cursor: default;
+            transition: background-color 0.15s, opacity 0.15s;
+        }
+
+        #serverTableBody tr[draggable="true"]:active {
+            cursor: default;
+        }
+
+        #serverTableBody tr.dragging {
+            opacity: 0.4;
+            background: rgba(93, 140, 71, 0.08) !important;
+            outline: 2px dashed #5D8C47;
+            outline-offset: -2px;
+        }
+
+        /* 拖拽手柄列样式 */
+        .drag-handle-cell {
+            width: 40px;
+            text-align: center;
+            cursor: grab;
+            /* 仅手柄显示抓取光标 */
+            color: #aaa;
+            user-select: none;
+            transition: color 0.15s;
+        }
+
+        .drag-handle-cell:hover {
+            color: #5D8C47;
+            /* hover 时高亮提示可拖拽 */
+        }
+
+        .drag-handle-cell:active {
+            cursor: grabbing;
+        }
+
+        .dark .drag-handle-cell {
+            color: #666;
+        }
+
+        .dark .drag-handle-cell:hover {
+            color: #7cb362;
+        }
     </style>
 </head>
 
@@ -90,7 +135,7 @@
                         <button onclick="sendTestEmail()"
                             class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition shadow-md">
                             <i class="fa-solid fa-paper-plane mr-1"></i> 测试邮件
-                        </button>                        <button onclick="openServerModal()"
+                        </button> <button onclick="openServerModal()"
                             class="px-4 py-2 bg-mcgreen text-white rounded-lg hover:bg-green-700 transition shadow-md">
                             <i class="fa-solid fa-plus mr-1"></i> 添加服务器
                         </button>
@@ -108,6 +153,8 @@
                                     <th class="p-4 font-semibold">简介</th>
                                     <th class="p-4 font-semibold">状态</th>
                                     <th class="p-4 font-semibold text-right">操作</th>
+                                    <th class="p-4 font-semibold drag-handle-cell" title="拖拽调整顺序"><i
+                                            class="fa-solid fa-grip-vertical"></i></th>
                                 </tr>
                             </thead>
                             <tbody id="serverTableBody"></tbody>
@@ -370,11 +417,18 @@
 
         function renderServerTable() {
             const tbody = document.getElementById('serverTableBody');
-            if (!servers.length) { tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-gray-500">暂无服务器</td></tr>`; return; }
+            if (!servers.length) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-gray-500">暂无服务器</td></tr>`;
+                return;
+            }
             tbody.innerHTML = servers.map(s => {
                 const online = s.is_online;
                 const dotCls = online ? 'status-online' : 'status-offline';
-                const statusText = online ? `<span class="text-green-600 dark:text-green-400">在线 ${s.players_online || 0}/${s.players_max || 0}</span>` : `<span class="text-red-500">离线</span>`;                // 状态列合并显示告警小铃铛图标（已配置 alert_emails 才显示）
+                const statusText = online
+                    ? `<span class="text-green-600 dark:text-green-400">在线 ${s.players_online || 0}/${s.players_max || 0}</span>`
+                    : `<span class="text-red-500">离线</span>`;
+
+                // 状态列合并显示告警小铃铛图标（已配置 alert_emails 才显示）
                 const emails = s.alert_emails || [];
                 let alertBadgeHtml = '';
                 if (emails.length > 0) {
@@ -383,19 +437,23 @@
                     const title = `已配置告警：${emails.length} 个收件人 · 离线 ${threshold} 分钟触发`;
                     alertBadgeHtml = ` <i class="fa-solid fa-bell text-orange-500 text-xs ml-1" title="${esc(title)}"></i>`;
                 }
-                return `<tr class="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750">
-            <td class="p-4 font-medium">${esc(s.name)}</td>
-            <td class="p-4 font-mono text-sm">${esc(s.ip)}:${s.port || 25565}</td>
-            <td class="p-4 text-sm">${esc(s.version || '-')}</td>
-            <td class="p-4 text-sm text-gray-500">${s.key ? esc(s.key) : '<span class="text-gray-400">-</span>'}</td>
-            <td class="p-4 text-sm text-gray-500 max-w-[14rem]"><div class="truncate" title="${esc(s.description || '')}">${s.description ? esc(s.description) : '<span class="text-gray-400">-</span>'}</div></td>
-            <td class="p-4"><span class="status-dot ${dotCls} mr-2"></span>${statusText}${alertBadgeHtml}</td>
-            <td class="p-4 text-right space-x-2 whitespace-nowrap">
-                <button onclick="editServer(${s.id})" class="text-blue-500 hover:text-blue-700 text-sm"><i class="fa-solid fa-pen"></i></button>
-                <button onclick="triggerPackUpload(${s.id})" class="text-purple-500 hover:text-purple-700 text-sm" title="上传整合包"><i class="fa-solid fa-upload"></i></button>
-                <button onclick="deleteServer(${s.id},'${esc(s.name)}')" class="text-red-500 hover:text-red-700 text-sm"><i class="fa-solid fa-trash"></i></button>
-                <input type="file" id="packInput_${s.id}" class="hidden" onchange="uploadPack(${s.id},this)">
-            </td></tr>`;
+
+                // ✅ 修改点1: <tr> 添加 draggable="true" 和 data-id
+                // ✅ 修改点2: 在第一个 <td> 前插入拖拽手柄单元格
+                return `<tr class="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750" draggable="true" data-id="${s.id}">
+                        <td class="p-4 font-medium">${esc(s.name)}</td>
+                        <td class="p-4 font-mono text-sm">${esc(s.ip)}:${s.port || 25565}</td>
+                        <td class="p-4 text-sm">${esc(s.version || '-')}</td>
+                        <td class="p-4 text-sm text-gray-500">${s.key ? esc(s.key) : '<span class="text-gray-400">-</span>'}</td>
+                        <td class="p-4 text-sm text-gray-500 max-w-[14rem]"><div class="truncate" title="${esc(s.description || '')}">${s.description ? esc(s.description) : '<span class="text-gray-400">-</span>'}</div></td>
+                        <td class="p-4"><span class="status-dot ${dotCls} mr-2"></span>${statusText}${alertBadgeHtml}</td>
+                        <td class="p-4 text-right space-x-2 whitespace-nowrap">
+                        <button onclick="editServer(${s.id})" class="text-blue-500 hover:text-blue-700 text-sm"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="triggerPackUpload(${s.id})" class="text-purple-500 hover:text-purple-700 text-sm" title="上传整合包"><i class="fa-solid fa-upload"></i></button>
+                        <button onclick="deleteServer(${s.id},'${esc(s.name)}')" class="text-red-500 hover:text-red-700 text-sm"><i class="fa-solid fa-trash"></i></button>
+                        <input type="file" id="packInput_${s.id}" class="hidden" onchange="uploadPack(${s.id},this)">
+                        </td>
+                        <td class="p-4 drag-handle-cell"><i class="fa-solid fa-grip-vertical"></i></td></tr>`
             }).join('');
         }
 
@@ -486,7 +544,7 @@
         async function deleteServer(id, name) { if (!confirm(`确定删除「${name}」？`)) return; const d = await api(`/api/admin/servers/${id}`, { method: 'DELETE' }); if (d?.success) { showToast('已删除'); loadAdminData(); } else showToast('删除失败', true); }
         function triggerPackUpload(sid) { document.getElementById('packInput_' + sid).click(); }
         async function uploadPack(sid, input) { const f = input.files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); showToast('上传中...'); try { const r = await fetch(`/api/admin/servers/${sid}/upload-pack`, { method: 'POST', body: fd }); const d = await r.json(); if (d.success) { showToast('整合包上传成功'); loadAdminData(); } else showToast(d.msg || '上传失败', true); } catch (e) { showToast('上传失败', true); } input.value = ''; }
-        async function manualCheck() { const d = await api('/api/admin/check-now', { method: 'POST' }); if (d?.success) { showToast('已触发巡检'); setTimeout(loadAdminData, 3000); } else showToast(d?.msg || '触发失败', true); }        async function sendTestEmail() {
+        async function manualCheck() { const d = await api('/api/admin/check-now', { method: 'POST' }); if (d?.success) { showToast('已触发巡检'); setTimeout(loadAdminData, 3000); } else showToast(d?.msg || '触发失败', true); } async function sendTestEmail() {
             const d = await api('/api/admin/test-email', { method: 'POST' });
             if (d?.success) { showToast('测试邮件已发送：' + d.msg); }
             else { showToast(d?.msg || '发送失败', true); }
@@ -592,6 +650,115 @@
         document.getElementById('sDesc').addEventListener('input', function (e) {
             document.getElementById('sDescCount').textContent = e.target.value.length;
         });
+
+        /* ===== 服务器拖拽排序  ===== */
+        (function initServerDragSort() {
+            const tbody = document.getElementById('serverTableBody');
+            let dragRow = null;
+            let isHandlePressed = false;
+            let rafId = null;
+
+            // 1. mousedown 记录手柄按下状态
+            tbody.addEventListener('mousedown', e => {
+                isHandlePressed = !!e.target.closest('.drag-handle-cell');
+            });
+
+            // 2. dragstart：校验手柄
+            tbody.addEventListener('dragstart', e => {
+                const row = e.target.closest('tr[draggable="true"]');
+                if (!row || !isHandlePressed) {
+                    e.preventDefault();
+                    e.dataTransfer.effectAllowed = 'none';
+                    e.dataTransfer.setData('text/plain', '');
+                    isHandlePressed = false;
+                    dragRow = null;
+                    return;
+                }
+
+                dragRow = row;
+                row.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', row.dataset.id);
+
+                const handle = row.querySelector('.drag-handle-cell');
+                if (handle) {
+                    const isDark = document.documentElement.classList.contains('dark');
+                    const ghost = document.createElement('div');
+                    ghost.innerHTML = '<i class="fa-solid fa-grip-vertical"></i>';
+                    ghost.style.cssText = `
+                        position: fixed; top: -1000px; left: -1000px;
+                        padding: 8px 12px;
+                        background: ${isDark ? '#374151' : '#5D8C47'};
+                        color: ${isDark ? '#d1d5db' : '#ffffff'};
+                        border-radius: 6px; font-size: 16px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                        pointer-events: none; z-index: 9999;
+                    `;
+                    document.body.appendChild(ghost);
+                    e.dataTransfer.setDragImage(ghost, 16, 16);
+                    requestAnimationFrame(() => setTimeout(() => ghost.remove(), 0));
+                }
+            });
+
+            // 3. ✅ dragover：必须阻止默认行为 + RAF 节流实时排序
+            tbody.addEventListener('dragover', e => {
+                e.preventDefault(); 
+                if (!dragRow || rafId) return;
+
+                rafId = requestAnimationFrame(() => {
+                    rafId = null;
+                    const targetRow = e.target.closest('tr[draggable="true"]');
+                    if (!targetRow || targetRow === dragRow) return;
+
+                    const rect = targetRow.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    if (e.clientY < midY) {
+                        tbody.insertBefore(dragRow, targetRow);
+                    } else {
+                        tbody.insertBefore(dragRow, targetRow.nextSibling);
+                    }
+                });
+            });
+
+            // 4. dragend：清理所有状态
+            tbody.addEventListener('dragend', () => {
+                if (dragRow) {
+                    dragRow.classList.remove('dragging');
+                    dragRow = null;
+                }
+                isHandlePressed = false;
+                if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+            });
+
+            // 5. drop：保存排序
+            tbody.addEventListener('drop', async e => {
+                e.preventDefault();
+                if (!dragRow) return;
+
+                const rows = tbody.querySelectorAll('tr[data-id]');
+                const order = Array.from(rows).map(r => r.dataset.id);
+
+                try {
+                    const res = await fetch('/api/admin/servers/reorder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ order })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('排序已保存');
+                    } else {
+                        showToast(data.msg || '排序保存失败', true);
+                        loadAdminData();
+                    }
+                } catch (err) {
+                    console.error('Reorder error:', err);
+                    showToast('网络错误，排序保存失败', true);
+                    loadAdminData();
+                }
+            });
+        })();
+
     </script>
 </body>
 

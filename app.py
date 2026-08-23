@@ -4,6 +4,7 @@ import json
 import os
 import re
 import time
+import tempfile
 from datetime import datetime
 from threading import Thread
 from urllib.parse import quote
@@ -76,11 +77,44 @@ def load_json(filename, default):
             return default
     return default
 
-
+'''
 def save_json(filename, data):
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-
+'''
+def save_json(filename, data):
+    """
+    原子写入 JSON（完全兼容原版 filename, data 参数签名）
+    防止并发写入或中途崩溃导致数据损坏
+    """
+    # 确保获取绝对路径的目录，避免相对路径导致临时文件创建失败
+    abs_path = os.path.abspath(filename)
+    dir_name = os.path.dirname(abs_path) or '.'
+    
+    fd = None
+    tmp_path = None
+    try:
+        # 1. 在同目录下创建临时文件（保证同一文件系统，replace 才是原子的）
+        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.json.tmp')
+        
+        # 2. 写入临时文件并强制刷盘
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno()) 
+        
+        # 3. 原子替换（Windows/Linux 均安全覆盖已有文件）
+        os.replace(tmp_path, abs_path)
+        
+    except Exception as e:
+        # 异常时清理临时文件，避免残留垃圾文件
+        if fd is not None:
+            try: os.close(fd)
+            except OSError: pass
+        if tmp_path and os.path.exists(tmp_path):
+            try: os.unlink(tmp_path)
+            except OSError: pass
+        raise e
 
 def init_data():
     #自动创建 DATA_FILE 所在的目录
@@ -671,6 +705,44 @@ def upload_pack(sid):
             save_json(DATA_FILE, data)
             return jsonify({"success": True, "filename": safe_name})
     return jsonify({"success": False, "msg": "服务器不存在"}), 404
+
+
+@app.route('/api/admin/servers/reorder', methods=['POST'])
+def reorder_servers():
+    if not session.get("is_admin"):
+        return jsonify({"success": False, "msg": "未授权"}), 403
+    
+    new_order = request.json.get("order", [])
+    if not isinstance(new_order, list):
+        return jsonify({"success": False, "msg": "参数格式错误"}), 400
+    
+    data = load_json(DATA_FILE, {"servers": [], "resources": []})
+    old_servers = data.get("servers", [])
+    
+    # 建立 ID -> 对象映射，避免 O(n²) 嵌套循环
+    server_map = {str(s["id"]): s for s in old_servers}
+    
+    # ✅ 按前端传来的新顺序重建列表
+    reordered = []
+    seen_ids = set()
+    for sid in new_order:
+        sid_str = str(sid)
+        if sid_str in server_map and sid_str not in seen_ids:
+            reordered.append(server_map[sid_str])
+            seen_ids.add(sid_str)
+    
+    # ✅ 兜底：防止拖拽期间新增的服务器丢失，自动追加到末尾
+    for s in old_servers:
+        sid_str = str(s["id"])
+        if sid_str not in seen_ids:
+            reordered.append(s)
+            seen_ids.add(sid_str)
+    
+    # ✅ 整体覆盖写回
+    data["servers"] = reordered
+    save_json(DATA_FILE, data)
+    
+    return jsonify({"success": True})
 
 
 # ==================== 资源管理 ====================
