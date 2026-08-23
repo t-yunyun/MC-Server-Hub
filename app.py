@@ -8,6 +8,8 @@ from datetime import datetime
 from threading import Thread
 from urllib.parse import quote
 
+import alert_email as email_module
+
 #项目配置
 CONFIG_FILE = 'config.json'
 
@@ -28,6 +30,14 @@ DATA_FILE = CFG['DATA_FILE']
 STATUS_FILE = CFG['STATUS_FILE']
 API_LOG_FILE = CFG['API_LOG_FILE']
 CHECK_INTERVAL = CFG['CHECK_INTERVAL']
+ALERT_ENABLED = CFG.get('ALERT_ENABLED', False)
+ALERT_OFFLINE_MINUTES = CFG.get('ALERT_OFFLINE_MINUTES', 60)
+SMTP_HOST = CFG.get('SMTP_HOST', '')
+SMTP_PORT = CFG.get('SMTP_PORT', 465)
+SMTP_USER = CFG.get('SMTP_USER', '')
+SMTP_PASSWORD = CFG.get('SMTP_PASSWORD', '')
+SMTP_FROM = CFG.get('SMTP_FROM') or SMTP_USER
+SMTP_USE_SSL = CFG.get('SMTP_USE_SSL', True)
 UPLOAD_DIR = CFG['UPLOAD_DIR']
 PACKS_DIR = os.path.join(UPLOAD_DIR, 'packs')
 RESOURCES_DIR = os.path.join(UPLOAD_DIR, 'resources')
@@ -238,6 +248,8 @@ def run_check():
             statuses[sid]["status_history"] = statuses[sid]["status_history"][-MAX_HISTORY:]
 
     save_json(STATUS_FILE, statuses)
+    # 离线检测：触发告警判定并调用邮件模块发送
+    check_alerts(data, statuses)
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ 巡检完成，共检查 {len(data['servers'])} 台服务器")
 
 
@@ -248,6 +260,78 @@ def schedule_check():
         except Exception as e:
             print(f"巡检出错: {e}")
         time.sleep(CHECK_INTERVAL)
+# ==================== 离线告警状态机 ====================
+
+def get_effective_threshold(server):
+    """返回服务器有效离线阈值（分钟）：服务器级覆盖优先，缺失用全局值。"""
+    per = server.get("alert_offline_minutes")
+    if per is not None:
+        return per
+    return ALERT_OFFLINE_MINUTES
+
+
+def check_alerts(data, statuses):
+    """巡检后调用：按状态机更新告警字段并触发邮件。"""
+    if not ALERT_ENABLED:
+        return
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_ts = time.time()
+    dirty = False
+
+    for s in data["servers"]:
+        st = statuses.get(str(s["id"]))
+        if not st:
+            continue
+
+        # 兜底旧数据
+        st.setdefault("offline_since", None)
+        st.setdefault("alert_sent", False)
+
+        emails = s.get("alert_emails", [])
+        threshold_min = get_effective_threshold(s)
+
+        # ===== 在线分支：清空状态 =====
+        if st.get("is_online"):
+            if st.get("offline_since") is not None or st.get("alert_sent"):
+                st["offline_since"] = None
+                st["alert_sent"] = False
+                dirty = True
+            continue
+
+        # ===== 离线分支 =====
+        if st.get("offline_since") is None:
+            # 首次离线，记录起点
+            st["offline_since"] = now_str
+            st["alert_sent"] = False
+            dirty = True
+            continue
+
+        # 已记录起点，判断是否超阈值
+        try:
+            offline_ts = datetime.strptime(st["offline_since"], "%Y-%m-%d %H:%M:%S").timestamp()
+        except (ValueError, TypeError):
+            # 时间格式异常，重新置为当前时间
+            st["offline_since"] = now_str
+            st["alert_sent"] = False
+            dirty = True
+            continue
+
+        offline_min = (now_ts - offline_ts) / 60
+
+        if offline_min >= threshold_min and not st.get("alert_sent"):
+            if emails:
+                Thread(target=email_module.send_alert_email, args=(s, st, list(emails)),
+                       name=f"alert-{s['id']}").start()
+                st["alert_sent"] = True
+                dirty = True
+        elif offline_min < threshold_min and st.get("alert_sent"):
+            # 容错：未超阈值却已标记，重置
+            st["alert_sent"] = False
+            dirty = True
+
+    if dirty:
+        save_json(STATUS_FILE, statuses)
 
 
 # ==================== 页面路由 ====================
@@ -255,6 +339,11 @@ def schedule_check():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/admin')
+def admin_page():
+    return render_template('admin.html')
 
 
 @app.route('/server/<int:sid>')
@@ -446,6 +535,24 @@ def admin_check():
     return jsonify({"is_admin": session.get("is_admin", False)})
 
 
+@app.route('/api/admin/config')
+def admin_config():
+    """返回前端需要的全局告警/SMTP 概览配置（不暴露密码等敏感字段）。"""
+    if not session.get("is_admin"):
+        return jsonify({"success": False, "msg": "未授权"}), 403
+    return jsonify({
+        "success": True,
+        "data": {
+            "ALERT_ENABLED": ALERT_ENABLED,
+            "ALERT_OFFLINE_MINUTES": ALERT_OFFLINE_MINUTES,
+            "SMTP_HOST": SMTP_HOST,
+            "SMTP_PORT": SMTP_PORT,
+            "SMTP_USER": SMTP_USER,
+            "SMTP_USE_SSL": SMTP_USE_SSL,
+        }
+    })
+
+
 @app.route('/api/admin/check-now', methods=['POST'])
 def manual_check():
     if not session.get("is_admin"):
@@ -466,6 +573,10 @@ def add_server():
     # ✅ extra_files 默认为空数组
     new_s.setdefault("extra_files", [])
     new_s.setdefault("pack_filename", "")
+    emails = new_s.get("alert_emails")
+    new_s["alert_emails"] = [e.strip() for e in emails if isinstance(e, str) and e.strip()] if isinstance(emails, list) else []
+    aom = new_s.get("alert_offline_minutes")
+    new_s["alert_offline_minutes"] = int(aom) if isinstance(aom, (int, float)) and aom >= 0 else None
     data["servers"].append(new_s)
     save_json(DATA_FILE, data)
     Thread(target=run_check).start()
@@ -487,6 +598,13 @@ def update_server(sid):
             for key in ["name", "ip", "port", "version", "key", "description"]:
                 if key in update_data:
                     data["servers"][i][key] = update_data[key]
+            # 告警配置：收件邮箱数组 + 每服务器离线阈值（分钟，null 表示用全局）
+            if "alert_emails" in update_data:
+                emails = update_data["alert_emails"]
+                data["servers"][i]["alert_emails"] = [e.strip() for e in emails if isinstance(e, str) and e.strip()] if isinstance(emails, list) else []
+            if "alert_offline_minutes" in update_data:
+                v = update_data["alert_offline_minutes"]
+                data["servers"][i]["alert_offline_minutes"] = int(v) if isinstance(v, (int, float)) and v >= 0 else None
             save_json(DATA_FILE, data)
             Thread(target=run_check).start()
             return jsonify({"success": True, "data": data["servers"][i]})
@@ -707,6 +825,17 @@ def upload_resource_file(rid):
     return jsonify({"success": False, "msg": "资源不存在"}), 404
 
 
+# ==================== 邮件测试 ====================
+
+@app.route('/api/admin/test-email', methods=['POST'])
+def test_email():
+    """手动触发 SMTP 测试邮件发送（管理员）。"""
+    if not session.get("is_admin"):
+        return jsonify({"success": False, "msg": "未授权"}), 403
+    ok, msg = email_module.send_test_email()
+    return jsonify({"success": ok, "msg": msg})
+
+
 # ==================== 启动 ====================
 
 if __name__ == '__main__':
@@ -714,6 +843,7 @@ if __name__ == '__main__':
     port = CFG.get('PORT', 5000)
     init_data()
     cleanup_orphan_files()
+    email_module.check_smtp_config()
     Thread(target=run_check).start()
     check_thread = Thread(target=schedule_check, daemon=True)
     check_thread.start()

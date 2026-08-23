@@ -13,47 +13,8 @@
             theme: { extend: { colors: { mcgreen: '#5D8C47', mcdark: '#1a1a2e' } } }
         }
     </script>
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        .glass {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .dark .glass {
-            background: rgba(31, 41, 55, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .fade-in {
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
         .server-card,
         .resource-card {
             transition: all 0.25s ease;
@@ -64,37 +25,6 @@
         .resource-card:hover {
             transform: translateY(-4px);
             box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
-        }
-
-        .status-dot {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-
-        .status-online {
-            background: #22c55e;
-            box-shadow: 0 0 8px #22c55e;
-        }
-
-        .status-offline {
-            background: #ef4444;
-        }
-
-        /* 自定义 Checkbox 样式 */
-        .res-check-item {
-            transition: all 0.15s;
-            cursor: pointer;
-        }
-
-        .res-check-item:hover {
-            background: rgba(93, 140, 71, 0.1);
-        }
-
-        .res-check-item.selected {
-            background: rgba(93, 140, 71, 0.2);
-            border-color: #5D8C47;
         }
     </style>
 </head>
@@ -121,344 +51,49 @@
 
     <!-- ========== 主内容区 ========== -->
     <main class="max-w-6xl mx-auto px-4 py-8">
-        <!-- 玩家视图 -->
-        <div id="playerView" class="hidden fade-in space-y-10">
-            <!-- 服务器列表 -->
-            <section>
-                <div class="text-center mb-8">
-                    <h1 class="text-3xl font-extrabold mb-2">🎮 选择你的服务器</h1>
-                    <p class="text-gray-500 dark:text-gray-400">实时状态 · 一键复制IP · 整合包下载</p>
-                </div>
-                <div id="serverGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
-            </section>
+        <!-- 服务器列表 -->
+        <section>
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-extrabold mb-2">🎮 选择你的服务器</h1>
+                <p class="text-gray-500 dark:text-gray-400">实时状态 · 一键复制IP · 整合包下载</p>
+            </div>
+            <div id="serverGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </section>
 
-            <!-- 资源下载区 -->
-            <section id="resourceSection" class="hidden">
-                <div class="flex items-center gap-3 mb-6">
-                    <div class="w-1 h-8 bg-orange-500 rounded-full"></div>
-                    <h2 class="text-2xl font-bold">📦 资源下载</h2>
-                </div>
-                <div id="resourceGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
-            </section>
-        </div>
-
-        <!-- 管理员视图 -->
-        <div id="adminView" class="hidden fade-in space-y-8">
-            <!-- 服务器管理 -->
-            <section>
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-2xl font-bold"><i class="fa-solid fa-server text-mcgreen mr-2"></i>服务器管理</h2>
-                    <div class="flex gap-2">
-                        <button onclick="manualCheck()"
-                            class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shadow-md">
-                            <i class="fa-solid fa-sync mr-1"></i> 立即巡检
-                        </button>
-                        <button onclick="openServerModal()"
-                            class="px-4 py-2 bg-mcgreen text-white rounded-lg hover:bg-green-700 transition shadow-md">
-                            <i class="fa-solid fa-plus mr-1"></i> 添加服务器
-                        </button>
-                    </div>
-                </div>
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th class="p-4 font-semibold">名称</th>
-                                    <th class="p-4 font-semibold">IP:端口</th>
-                                    <th class="p-4 font-semibold">版本</th>
-                                    <th class="p-4 font-semibold">密钥</th>
-                                    <th class="p-4 font-semibold">简介</th>
-                                    <th class="p-4 font-semibold">状态</th>
-                                    <th class="p-4 font-semibold text-right">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="serverTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- 资源管理 -->
-            <section>
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-2xl font-bold"><i class="fa-solid fa-box-open text-orange-500 mr-2"></i>资源管理</h2>
-                    <button onclick="openResourceModal()"
-                        class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition shadow-md">
-                        <i class="fa-solid fa-plus mr-1"></i> 添加资源
-                    </button>
-                </div>
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th class="p-4 font-semibold">名称</th>
-                                    <th class="p-4 font-semibold">类型</th>
-                                    <th class="p-4 font-semibold">来源</th>
-                                    <th class="p-4 font-semibold">状态</th>
-                                    <th class="p-4 font-semibold text-right">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="resourceTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-        </div>
+        <!-- 资源下载区 -->
+        <section id="resourceSection" class="hidden mt-10">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-1 h-8 bg-orange-500 rounded-full"></div>
+                <h2 class="text-2xl font-bold">📦 资源下载</h2>
+            </div>
+            <div id="resourceGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </section>
     </main>
 
     <!-- ========== Toast ========== -->
     <div id="toast" class="hidden fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white z-[100] fade-in">
     </div>
 
-    <!-- ========== 登录弹窗 ========== -->
-    <div id="loginModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
-        <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-sm fade-in">
-            <h2 class="text-2xl font-bold mb-6 text-center dark:text-white">🔐 管理员登录</h2>
-            <form onsubmit="handleLogin(event)" class="space-y-4">
-                <input type="password" id="loginPassword" placeholder="请输入管理密码" required
-                    class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-mcgreen outline-none">
-                <button type="submit"
-                    class="w-full p-3 bg-mcgreen text-white rounded-lg hover:bg-green-700 font-bold transition">登
-                    录</button>
-            </form>
-            <button onclick="closeLoginModal()"
-                class="w-full mt-3 p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-sm">取消</button>
-        </div>
-    </div>
-
-    <!-- ========== ✅ 服务器编辑弹窗 (含资源多选) ========== -->
-    <div id="serverModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
-        <div
-            class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-lg fade-in max-h-[90vh] overflow-y-auto">
-            <h3 id="serverModalTitle" class="text-xl font-bold mb-4 dark:text-white">添加服务器</h3>
-            <form onsubmit="saveServer(event)" class="space-y-4">
-                <input type="hidden" id="editServerId">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">服务器名称</label>
-                    <input type="text" id="sName" required
-                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-                <div class="grid grid-cols-3 gap-3">
-                    <div class="col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">IP 地址</label>
-                        <input type="text" id="sIp" required
-                            class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">端口</label>
-                        <input type="number" id="sPort" value="25565"
-                            class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">游戏版本</label>
-                    <input type="text" id="sVersion" placeholder="如: 1.20.1"
-                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">连接密钥 (可选)</label>
-                    <input type="text" id="sKey" placeholder="留空则不显示"
-                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">服务器简介 (可选)</label>
-                    <textarea id="sDesc" rows="3" placeholder="留空则不显示，支持换行"
-                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-y"></textarea>
-                </div>
-
-                <!-- ✅ 额外文件选择器 (关联资源库) -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        <i class="fa-solid fa-folder-plus mr-1 text-purple-500"></i> 关联额外文件 (从资源库选择)
-                    </label>
-                    <div id="resSelectList"
-                        class="max-h-48 overflow-y-auto border rounded-lg dark:border-gray-600 p-2 space-y-1 bg-gray-50 dark:bg-gray-900">
-                        <div class="text-center text-gray-400 text-sm py-4">正在加载资源列表...</div>
-                    </div>
-                    <p class="text-xs text-gray-500 mt-1">* 勾选的资源将显示在该服务器的详情页中</p>
-                </div>
-
-                <div class="flex justify-end gap-3 mt-4">
-                    <button type="button" onclick="closeServerModal()"
-                        class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg dark:text-gray-300 dark:hover:bg-gray-700">取消</button>
-                    <button type="submit"
-                        class="px-4 py-2 bg-mcgreen text-white rounded-lg hover:bg-green-700">保存</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- ========== 资源添加弹窗 (含隐藏选项) ========== -->
-    <div id="resourceModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
-        <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-lg fade-in">
-            <h3 id="resourceModalTitle" class="text-xl font-bold mb-4 dark:text-white">添加资源</h3>
-            <div class="flex border-b dark:border-gray-700 mb-4">
-                <button type="button" onclick="switchResTab('link')" id="tabLink"
-                    class="flex-1 py-2 text-sm font-medium border-b-2 border-purple-600 text-purple-600 dark:text-purple-400 transition">🔗
-                    外部链接</button>
-                <button type="button" onclick="switchResTab('local')" id="tabLocal"
-                    class="flex-1 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition">📁
-                    本地上传</button>
-            </div>
-
-            <!-- 外部链接表单 -->
-            <form id="resourceLinkForm" onsubmit="saveResourceLink(event)" class="space-y-4">
-                <input type="hidden" id="resLinkId">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">资源名称</label>
-                    <input type="text" id="rLinkName" required
-                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">类型标签</label>
-                    <input type="text" id="rLinkType" required
-                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">下载链接</label>
-                    <input type="url" id="rLinkUrl" required
-                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="rLinkHidden" class="w-4 h-4 text-mcgreen rounded focus:ring-mcgreen">
-                    <label for="rLinkHidden" class="text-sm text-gray-600 dark:text-gray-400">隐藏资源
-                        (不在首页展示，仅服务器关联可见)</label>
-                </div>
-                <div class="flex justify-end gap-3 mt-4">
-                    <button type="button" onclick="closeResourceModal()"
-                        class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg dark:text-gray-300 dark:hover:bg-gray-700">取消</button>
-                    <button type="submit"
-                        class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">保存</button>
-                </div>
-            </form>
-
-            <!-- 本地上传表单 -->
-            <form id="resourceLocalForm" onsubmit="saveResourceLocal(event)" class="space-y-4 hidden">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">资源名称</label>
-                    <input type="text" id="rLocalName" required
-                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">类型标签</label>
-                    <input type="text" id="rLocalType" required
-                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择文件</label>
-                    <input type="file" id="rLocalFile" required
-                        class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                </div>
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="rLocalHidden" class="w-4 h-4 text-mcgreen rounded focus:ring-mcgreen">
-                    <label for="rLocalHidden" class="text-sm text-gray-600 dark:text-gray-400">隐藏资源
-                        (不在首页展示，仅服务器关联可见)</label>
-                </div>
-                <div class="flex justify-end gap-3 mt-4">
-                    <button type="button" onclick="closeResourceModal()"
-                        class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg dark:text-gray-300 dark:hover:bg-gray-700">取消</button>
-                    <button type="submit"
-                        class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600">上传并保存</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
+    <script src="/static/js/common.js"></script>
     <script>
-        let currentUser = null;
         let servers = [];
-        let allResources = []; // 管理员视角下的所有资源（含隐藏）
-        let publicResources = []; // 玩家视角下的公开资源
+        let publicResources = [];
 
-        async function api(url, options = {}) {
-            try {
-                const resp = await fetch(url, options);
-                if (!resp.ok) return null;
-                return await resp.json();
-            } catch (e) { console.error('API error:', url, e); return null; }
-        }
-
-        function showToast(msg, isError = false) {
-            const t = document.getElementById('toast');
-            t.textContent = msg;
-            t.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white z-[100] fade-in ${isError ? 'bg-red-500' : 'bg-gray-800'}`;
-            setTimeout(() => t.classList.add('hidden'), 2500);
-        }
-
-        function toggleTheme() {
-            document.documentElement.classList.toggle('dark');
-            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-        }
-
-        function copyText(text) {
-            // 创建一个隐藏的文本框
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            // 关键：必须脱离文档流且不可见，防止页面闪烁
-            ta.style.cssText = 'position:fixed; left:-9999px; top:-9999px; opacity:0;';
-            document.body.appendChild(ta);
-
-            // 兼容移动端和桌面端
-            ta.focus();
-            ta.select();
-            try {
-                const successful = document.execCommand('copy');
-                if (successful) {
-                    showToast('已复制: ' + text);
-                } else {
-                    showToast('复制失败，请手动复制', true);
-                }
-            } catch (err) {
-                showToast('浏览器不支持自动复制', true);
-            }
-            // 清理 DOM
-            document.body.removeChild(ta);
-        }
-
-        if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        }
-
-        /* ===== 认证 ===== */
-        async function checkAuth() {
-            const data = await api('/api/admin/check');
-            currentUser = data?.is_admin ? 'admin' : null;
-            renderAuth(); renderView();
-        }
-        function renderAuth() {
+        /* ===== 导航栏认证区 ===== */
+        function renderAuth(isAdmin) {
             const area = document.getElementById('authArea');
-            if (currentUser === 'admin') {
-                area.innerHTML = `<span class="text-sm text-mcgreen font-semibold"><i class="fa-solid fa-shield-halved mr-1"></i>管理员</span>
-            <button onclick="logout()" class="px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition">退出</button>`;
+            if (isAdmin) {
+                area.innerHTML = `<a href="/admin" class="px-3 py-1.5 bg-mcgreen text-white text-sm rounded-lg hover:bg-green-700 transition"><i class="fa-solid fa-shield-halved mr-1"></i>管理后台</a>`;
             } else {
-                area.innerHTML = `<button onclick="openLoginModal()" class="px-3 py-1.5 bg-mcgreen text-white text-sm rounded-lg hover:bg-green-700 transition">管理员登录</button>`;
+                area.innerHTML = `<a href="/admin" class="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"><i class="fa-solid fa-right-to-bracket mr-1"></i>管理员入口</a>`;
             }
-        }
-        function openLoginModal() { document.getElementById('loginModal').classList.remove('hidden'); }
-        function closeLoginModal() { document.getElementById('loginModal').classList.add('hidden'); document.getElementById('loginPassword').value = ''; }
-        async function handleLogin(e) {
-            e.preventDefault();
-            const data = await api('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: document.getElementById('loginPassword').value }) });
-            if (data?.success) { showToast('登录成功'); closeLoginModal(); checkAuth(); } else showToast(data?.msg || '密码错误', true);
-        }
-        async function logout() { await api('/api/admin/logout', { method: 'POST' }); currentUser = null; renderAuth(); renderView(); showToast('已退出'); }
-
-        function renderView() {
-            const pv = document.getElementById('playerView'), av = document.getElementById('adminView');
-            if (currentUser === 'admin') { pv.classList.add('hidden'); av.classList.remove('hidden'); loadAdminData(); }
-            else { av.classList.add('hidden'); pv.classList.remove('hidden'); loadPlayerData(); }
         }
 
         /* ===== 玩家视图 ===== */
         async function loadPlayerData() {
             const [srvData, resData] = await Promise.all([api('/api/servers'), api('/api/resources')]);
             servers = Array.isArray(srvData) ? srvData : [];
-            publicResources = Array.isArray(resData) ? resData : []; // 玩家只拿到未隐藏的
+            publicResources = Array.isArray(resData) ? resData : [];
             renderPlayerServers();
             renderPlayerResources();
         }
@@ -511,218 +146,16 @@
             <div class="flex gap-2">${btnHtml}</div>
         </div>`;
             }).join('');
-
         }
 
         function goDetail(sid) { window.location.href = '/server/' + sid; }
 
-        /* ===== 管理员视图 ===== */
-        async function loadAdminData() {
-            // 管理员请求 /api/resources 会返回全部资源（包含隐藏的）
-            const [srvData, resData] = await Promise.all([api('/api/servers'), api('/api/resources')]);
-            servers = Array.isArray(srvData) ? srvData : [];
-            allResources = Array.isArray(resData) ? resData : [];
-            renderServerTable(); renderResourceTable();
-        }
-
-        function renderServerTable() {
-            const tbody = document.getElementById('serverTableBody');
-            if (!servers.length) { tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-gray-500">暂无服务器</td></tr>`; return; }
-            tbody.innerHTML = servers.map(s => {
-                const online = s.is_online;
-                const dotCls = online ? 'status-online' : 'status-offline';
-                const statusText = online ? `<span class="text-green-600 dark:text-green-400">在线 ${s.players_online || 0}/${s.players_max || 0}</span>` : `<span class="text-red-500">离线</span>`;
-                return `<tr class="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750">
-            <td class="p-4 font-medium">${esc(s.name)}</td>
-            <td class="p-4 font-mono text-sm">${esc(s.ip)}:${s.port || 25565}</td>
-            <td class="p-4 text-sm">${esc(s.version || '-')}</td>
-            <td class="p-4 text-sm text-gray-500">${s.key ? esc(s.key) : '<span class="text-gray-400">-</span>'}</td>
-            <td class="p-4 text-sm text-gray-500 max-w-[14rem]"><div class="truncate" title="${esc(s.description || '')}">${s.description ? esc(s.description) : '<span class="text-gray-400">-</span>'}</div></td>
-            <td class="p-4"><span class="status-dot ${dotCls} mr-2"></span>${statusText}</td>
-            <td class="p-4 text-right space-x-2 whitespace-nowrap">
-                <button onclick="editServer(${s.id})" class="text-blue-500 hover:text-blue-700 text-sm"><i class="fa-solid fa-pen"></i></button>
-                <button onclick="triggerPackUpload(${s.id})" class="text-purple-500 hover:text-purple-700 text-sm" title="上传整合包"><i class="fa-solid fa-upload"></i></button>
-                <button onclick="deleteServer(${s.id},'${esc(s.name)}')" class="text-red-500 hover:text-red-700 text-sm"><i class="fa-solid fa-trash"></i></button>
-                <input type="file" id="packInput_${s.id}" class="hidden" onchange="uploadPack(${s.id},this)">
-            </td></tr>`;
-            }).join('');
-        }
-
-        // ✅ 打开服务器弹窗时，渲染资源多选列表
-        function openServerModal(server = null) {
-            document.getElementById('serverModalTitle').textContent = server ? '编辑服务器' : '添加服务器';
-            document.getElementById('editServerId').value = server?.id || '';
-            document.getElementById('sName').value = server?.name || '';
-            document.getElementById('sIp').value = server?.ip || '';
-            document.getElementById('sPort').value = server?.port || 25565;
-            document.getElementById('sVersion').value = server?.version || '';
-            document.getElementById('sKey').value = server?.key || '';
-            document.getElementById('sDesc').value = server?.description || '';
-
-            // 渲染资源选择列表
-            const listEl = document.getElementById('resSelectList');
-            if (!allResources.length) {
-                listEl.innerHTML = `<div class="text-center text-gray-400 text-sm py-4">暂无可用资源，请先添加资源</div>`;
-            } else {
-                const selectedIds = Array.isArray(server?.extra_files) ? server.extra_files : [];
-                listEl.innerHTML = allResources.map(r => {
-                    const isChecked = selectedIds.includes(r.id);
-                    const hiddenTag = r.hidden ? `<span class="text-xs text-red-500 ml-1">[隐藏]</span>` : '';
-                    return `<div class="res-check-item flex items-center gap-2 p-2 rounded border border-transparent ${isChecked ? 'selected' : ''}" onclick="toggleResCheck(this, ${r.id})">
-                <input type="checkbox" class="w-4 h-4 text-mcgreen rounded focus:ring-mcgreen pointer-events-none" ${isChecked ? 'checked' : ''}>
-                <div class="flex-1 min-w-0">
-                    <span class="text-sm font-medium truncate">${esc(r.name)} ${hiddenTag}</span>
-                    <span class="text-xs text-gray-500 ml-1">(${esc(r.type || '-')})</span>
-                </div>
-            </div>`;
-                }).join('');
-            }
-
-            document.getElementById('serverModal').classList.remove('hidden');
-        }
-
-        function toggleResCheck(el, rid) {
-            const cb = el.querySelector('input[type="checkbox"]');
-            cb.checked = !cb.checked;
-            if (cb.checked) el.classList.add('selected');
-            else el.classList.remove('selected');
-        }
-
-        function closeServerModal() { document.getElementById('serverModal').classList.add('hidden'); }
-        function editServer(id) { const s = servers.find(x => x.id === id); if (s) openServerModal(s); }
-
-        async function saveServer(e) {
-            e.preventDefault();
-            const id = document.getElementById('editServerId').value;
-
-            // ✅ 收集勾选的资源 ID
-            const checkedCbs = document.querySelectorAll('#resSelectList input[type="checkbox"]:checked');
-            const extraFiles = Array.from(checkedCbs).map(cb => {
-                const onclickStr = cb.closest('.res-check-item').getAttribute('onclick');
-                const match = onclickStr.match(/toggleResCheck\(this,\s*(\d+)\)/);
-                return match ? parseInt(match[1]) : null;
-            }).filter(Boolean);
-
-            const payload = {
-                name: document.getElementById('sName').value.trim(),
-                ip: document.getElementById('sIp').value.trim(),
-                port: parseInt(document.getElementById('sPort').value) || 25565,
-                version: document.getElementById('sVersion').value.trim(),
-                key: document.getElementById('sKey').value.trim(),
-                description: document.getElementById('sDesc').value.trim(),
-                extra_files: extraFiles // 传递 ID 数组
-            };
-
-            let data;
-            if (id) data = await api(`/api/admin/servers/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            else data = await api('/api/admin/servers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-
-            if (data?.success) { showToast('保存成功'); closeServerModal(); loadAdminData(); } else showToast(data?.msg || '保存失败', true);
-        }
-
-        async function deleteServer(id, name) { if (!confirm(`确定删除「${name}」？`)) return; const d = await api(`/api/admin/servers/${id}`, { method: 'DELETE' }); if (d?.success) { showToast('已删除'); loadAdminData(); } else showToast('删除失败', true); }
-        function triggerPackUpload(sid) { document.getElementById('packInput_' + sid).click(); }
-        async function uploadPack(sid, input) { const f = input.files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); showToast('上传中...'); try { const r = await fetch(`/api/admin/servers/${sid}/upload-pack`, { method: 'POST', body: fd }); const d = await r.json(); if (d.success) { showToast('整合包上传成功'); loadAdminData(); } else showToast(d.msg || '上传失败', true); } catch (e) { showToast('上传失败', true); } input.value = ''; }
-        async function manualCheck() { const d = await api('/api/admin/check-now', { method: 'POST' }); if (d?.success) { showToast('已触发巡检'); setTimeout(loadAdminData, 3000); } else showToast(d?.msg || '触发失败', true); }
-
-        // ✅ 资源管理表格 (增加隐藏状态列和切换开关)
-        function renderResourceTable() {
-            const tbody = document.getElementById('resourceTableBody');
-            if (!allResources.length) { tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-gray-500">暂无资源</td></tr>`; return; }
-            tbody.innerHTML = allResources.map(r => {
-                let sourceHtml;
-                if (r.has_file) sourceHtml = `<a href="/api/download/resource/${r.id}" class="text-orange-500 hover:underline text-sm"><i class="fa-solid fa-file-arrow-down mr-1"></i>${esc(r.original_filename || '本地文件')}</a>`;
-                else if (r.link) sourceHtml = `<a href="${esc(r.link)}" target="_blank" class="text-purple-500 hover:underline text-sm break-all"><i class="fa-solid fa-link mr-1"></i>外部链接</a>`;
-                else sourceHtml = `<span class="text-gray-400 text-sm">未配置</span>`;
-
-                const isHidden = r.hidden || false;
-                const hiddenToggle = `<button onclick="toggleResHidden(${r.id}, ${!isHidden})" class="px-2 py-1 rounded text-xs font-semibold transition ${isHidden ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'}">
-            ${isHidden ? '<i class="fa-solid fa-eye-slash mr-1"></i>已隐藏' : '<i class="fa-solid fa-eye mr-1"></i>公开'}
-        </button>`;
-
-                return `<tr class="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750">
-            <td class="p-4 font-medium">${esc(r.name)}</td>
-            <td class="p-4"><span class="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">${esc(r.type || '-')}</span></td>
-            <td class="p-4">${sourceHtml}</td>
-            <td class="p-4">${hiddenToggle}</td>
-            <td class="p-4 text-right space-x-2 whitespace-nowrap">
-                <button onclick="triggerResUpload(${r.id})" class="text-purple-500 hover:text-purple-700 text-sm" title="上传/替换文件"><i class="fa-solid fa-upload"></i></button>
-                <button onclick="deleteResource(${r.id},'${esc(r.name)}')" class="text-red-500 hover:text-red-700 text-sm"><i class="fa-solid fa-trash"></i></button>
-                <input type="file" id="resInput_${r.id}" class="hidden" onchange="uploadResFile(${r.id},this)">
-            </td></tr>`;
-            }).join('');
-        }
-
-        async function toggleResHidden(rid, newStatus) {
-            const d = await api(`/api/admin/resources/${rid}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ hidden: newStatus })
-            });
-            if (d?.success) {
-                showToast(newStatus ? '已隐藏' : '已公开');
-                loadAdminData();
-            } else {
-                showToast('操作失败', true);
-            }
-        }
-
-        function openResourceModal() {
-            document.getElementById('resourceModalTitle').textContent = '添加资源';
-            document.getElementById('resourceLinkForm').reset();
-            document.getElementById('resourceLocalForm').reset();
-            document.getElementById('resLinkId').value = '';
-            switchResTab('link');
-            document.getElementById('resourceModal').classList.remove('hidden');
-        }
-        function closeResourceModal() { document.getElementById('resourceModal').classList.add('hidden'); }
-        function switchResTab(tab) {
-            const lf = document.getElementById('resourceLinkForm'), lof = document.getElementById('resourceLocalForm'), tl = document.getElementById('tabLink'), tlo = document.getElementById('tabLocal');
-            if (tab === 'link') { lf.classList.remove('hidden'); lof.classList.add('hidden'); tl.className = 'flex-1 py-2 text-sm font-medium border-b-2 border-purple-600 text-purple-600 dark:text-purple-400 transition'; tlo.className = 'flex-1 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition'; }
-            else { lof.classList.remove('hidden'); lf.classList.add('hidden'); tlo.className = 'flex-1 py-2 text-sm font-medium border-b-2 border-orange-500 text-orange-500 dark:text-orange-400 transition'; tl.className = 'flex-1 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition'; }
-        }
-
-        async function saveResourceLink(e) {
-            e.preventDefault();
-            const d = await api('/api/admin/resources', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: document.getElementById('rLinkName').value.trim(),
-                    type: document.getElementById('rLinkType').value.trim(),
-                    link: document.getElementById('rLinkUrl').value.trim(),
-                    hidden: document.getElementById('rLinkHidden').checked // ✅ 传递隐藏状态
-                })
-            });
-            if (d?.success) { showToast('已添加'); closeResourceModal(); loadAdminData(); } else showToast(d?.msg || '添加失败', true);
-        }
-
-        async function saveResourceLocal(e) {
-            e.preventDefault();
-            const f = document.getElementById('rLocalFile').files[0];
-            if (!f) { showToast('请选择文件', true); return; }
-            const fd = new FormData();
-            fd.append('file', f);
-            fd.append('name', document.getElementById('rLocalName').value.trim());
-            fd.append('type', document.getElementById('rLocalType').value.trim());
-            fd.append('hidden', document.getElementById('rLocalHidden').checked ? 'true' : 'false'); // ✅ 传递隐藏状态
-
-            showToast('上传中...');
-            try {
-                const r = await fetch('/api/admin/resources/upload-local', { method: 'POST', body: fd });
-                const d = await r.json();
-                if (d.success) { showToast('上传成功'); closeResourceModal(); loadAdminData(); } else showToast(d.msg || '上传失败', true);
-            } catch (err) { showToast('上传失败', true); }
-        }
-
-        function triggerResUpload(rid) { document.getElementById('resInput_' + rid).click(); }
-        async function uploadResFile(rid, input) { const f = input.files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); showToast('上传中...'); try { const r = await fetch(`/api/admin/resources/${rid}/upload-file`, { method: 'POST', body: fd }); const d = await r.json(); if (d.success) { showToast('文件已更新'); loadAdminData(); } else showToast(d.msg || '上传失败', true); } catch (e) { showToast('上传失败', true); } input.value = ''; }
-        async function deleteResource(id, name) { if (!confirm(`确定删除「${name}」？\n(同时会从所有服务器的额外文件中移除)`)) return; const d = await api(`/api/admin/resources/${id}`, { method: 'DELETE' }); if (d?.success) { showToast('已删除'); loadAdminData(); } else showToast('删除失败', true); }
-
-        function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
-
-        checkAuth();
-        setInterval(() => { if (currentUser === 'admin') loadAdminData(); else loadPlayerData(); }, 30000);
+        (async function init() {
+            const auth = await api('/api/admin/check');
+            renderAuth(!!auth?.is_admin);
+            loadPlayerData();
+        })();
+        setInterval(loadPlayerData, 30000);
     </script>
 </body>
 

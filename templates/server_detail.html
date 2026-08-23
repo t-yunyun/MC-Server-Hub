@@ -12,48 +12,12 @@
     <script>
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { mcgreen: '#5D8C47' } } } }
     </script>
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        .glass {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .dark .glass {
-            background: rgba(31, 41, 55, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .fade-in {
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px)
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0)
-            }
-        }
-
-        .status-online {
-            background: #22c55e;
-            box-shadow: 0 0 8px #22c55e;
-        }
-
-        .status-offline {
-            background: #ef4444;
-        }
-
+        /* 详情页状态点比首页略大 */
         .status-dot {
-            display: inline-block;
             width: 12px;
             height: 12px;
-            border-radius: 50%;
         }
     </style>
 </head>
@@ -64,7 +28,7 @@
         <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
             <a href="/" class="flex items-center gap-2 hover:opacity-80"><i class="fa-solid fa-arrow-left"></i><span
                     class="font-bold">返回大厅</span></a>
-            <button onclick="toggleTheme()"
+            <button onclick="toggleTheme(); if (playersChart) renderPlayersChart();"
                 class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition">
                 <i class="fa-solid fa-moon dark:hidden"></i><i
                     class="fa-solid fa-sun hidden dark:block text-yellow-400"></i>
@@ -191,35 +155,12 @@
     <div id="toast" class="hidden fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white z-[100] fade-in">
     </div>
 
+    <script src="/static/js/common.js"></script>
     <script>
         const pathParts = window.location.pathname.split('/').filter(Boolean);
         const SID = parseInt(pathParts[pathParts.length - 1]);
         let serverData = null;
         let playersChart = null, lastHistory = [], lastPlayersMax = 0;
-
-        function showToast(msg, isError = false) { const t = document.getElementById('toast'); t.textContent = msg; t.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white z-[100] fade-in ${isError ? 'bg-red-500' : 'bg-gray-800'}`; setTimeout(() => t.classList.add('hidden'), 2500); }
-        function copyText(text) {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.cssText = 'position:fixed; left:-9999px; top:-9999px; opacity:0;';
-            document.body.appendChild(ta);
-            ta.focus();
-            ta.select();
-            try {
-                const successful = document.execCommand('copy');
-                if (successful) {
-                    showToast('已复制: ' + text);
-                } else {
-                    showToast('复制失败，请手动复制', true);
-                }
-            } catch (err) {
-                showToast('浏览器不支持自动复制', true);
-            }
-            document.body.removeChild(ta);
-        }
-        function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
-        if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark');
-        function toggleTheme() { document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light'); if (playersChart) renderPlayersChart(); }
 
         async function loadMetrics() {
             try {
