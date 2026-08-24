@@ -77,14 +77,10 @@ def load_json(filename, default):
             return default
     return default
 
-'''
-def save_json(filename, data):
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-'''
+
 def save_json(filename, data):
     """
-    原子写入 JSON（完全兼容原版 filename, data 参数签名）
+    原子写入 JSON(完全兼容原版 filename, data 参数签名)
     防止并发写入或中途崩溃导致数据损坏
     """
     # 确保获取绝对路径的目录，避免相对路径导致临时文件创建失败
@@ -368,6 +364,26 @@ def check_alerts(data, statuses):
         save_json(STATUS_FILE, statuses)
 
 
+import re
+from urllib.parse import quote
+import os
+
+import os
+from urllib.parse import quote
+
+
+def make_content_disposition(filename: str) -> str:
+    # 判断是否包含非 ASCII 字符
+    if filename.isascii():
+        ascii_name = filename
+    else:
+        _, ext = os.path.splitext(filename)
+        ascii_name = f"unnamed{ext}"
+
+    encoded_name = quote(filename, safe='')
+    return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded_name}'
+
+
 # ==================== 页面路由 ====================
 
 @app.route('/')
@@ -517,11 +533,9 @@ def download_pack(sid):
                 return jsonify({"success": False, "msg": "文件不存在"}), 404
 
             download_name = s.get("pack_original_filename") or s["pack_filename"]
-            response = make_response(send_file(filepath, as_attachment=True))
-            encoded_name = quote(download_name.encode('utf-8'))
-            response.headers['Content-Disposition'] = (
-                f"attachment; filename=\"{download_name}\"; filename*=UTF-8''{encoded_name}"
-            )
+            response = make_response(send_file(filepath, as_attachment=False))
+            response.headers['Content-Disposition'] = make_content_disposition(download_name)
+            response.headers['Content-Type'] = 'application/octet-stream'
             return response
 
     return jsonify({"success": False, "msg": "文件不存在"}), 404
@@ -537,11 +551,9 @@ def download_resource_file(rid):
                 return jsonify({"success": False, "msg": "文件不存在"}), 404
 
             download_name = r.get("original_filename") or r["file_path"]
-            response = make_response(send_file(filepath, as_attachment=True))
-            encoded_name = quote(download_name.encode('utf-8'))
-            response.headers['Content-Disposition'] = (
-                f"attachment; filename=\"{download_name}\"; filename*=UTF-8''{encoded_name}"
-            )
+            response = make_response(send_file(filepath, as_attachment=False))
+            response.headers['Content-Disposition'] = make_content_disposition(download_name)
+            response.headers['Content-Type'] = 'application/octet-stream'
             return response
 
     return jsonify({"success": False, "msg": "文件不存在"}), 404
