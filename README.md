@@ -41,12 +41,16 @@
 | `UPLOAD_DIR`     | String  | `uploads`                   | 文件上传根目录。整合包将存储于 `{UPLOAD_DIR}/packs`，资源文件存储于 `{UPLOAD_DIR}/resources`。 |
 | `ALERT_ENABLED` | Boolean | `false` | 是否启用离线告警邮件功能。设为 `false` 时，巡检不会发送任何告警邮件，仅记录状态。 |
 | `ALERT_OFFLINE_MINUTES` | Integer | `60` | 服务器离线多久后触发告警邮件（单位：分钟）。服务器级 `alert_offline_minutes` 字段可覆盖此全局值。 |
+| `ALERT_REPEAT_MINUTES` | Integer | `60` | 重复告警间隔（单位：分钟）。首次告警后若服务器持续离线，每隔此间隔会再次发送告警。可在管理后台「全局告警设置」中修改，保存后立即生效并写入此文件。 |
+| `ALERT_BASE_URL` | String | 空 | 面板对外访问的基础地址（如 `http://your-domain:5001`），用于拼接告警邮件中的拒收链接 `/verify?id=&email=`。留空时自动使用 `http://127.0.0.1:{PORT}`。公网部署时请配置为外部可访问地址。 |
 | `SMTP_HOST` | String | 空 | SMTP 服务器地址。常见：QQ 邮箱 `smtp.qq.com`、网易 `smtp.163.com`、Gmail `smtp.gmail.com`。 |
 | `SMTP_PORT` | Integer | `465` | SMTP 服务器端口。SSL 直连通常为 `465`，STARTTLS 通常为 `587`，需与 `SMTP_USE_SSL` 配套使用。 |
 | `SMTP_USER` | String | 空 | SMTP 登录账号（即发件邮箱地址），同时默认作为告警邮件的收件人之一。 |
 | `SMTP_PASSWORD` | String | 空 | SMTP 登录授权码（**不是邮箱登录密码**）。QQ/网易等邮箱需在设置中开启 SMTP 服务并生成授权码。**部署前请务必修改**。 |
 | `SMTP_FROM` | String | 空 | 实际显示的发件人地址。留空时默认使用 `SMTP_USER`。 |
 | `SMTP_USE_SSL` | Boolean | `true` | 是否使用 SSL 直连。`true` 走 `SMTP_SSL`（建议端口 `465`），`false` 走 `SMTP` + `STARTTLS`（建议端口 `587`）。 |
+| `FOOTER_FILE` | String | `footer.html` | 自定义页尾 HTML 文件路径（相对项目根目录）。文件存在时内容会注入大厅首页与管理后台底部；文件不存在则不渲染页尾，无需改代码。 |
+| `HIDE_ADMIN_ENTRY` | Boolean | `true` | 是否隐藏大厅首页导航栏的「管理员入口」按钮。`true` 时未登录访客看不到入口（仍可直接访问 `/admin` 登录）；已登录管理员始终显示「管理后台」按钮。 |
 
 ---
 

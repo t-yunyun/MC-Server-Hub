@@ -12,10 +12,14 @@
     "UPLOAD_DIR": "uploads",
     "ALERT_ENABLED": false,
     "ALERT_OFFLINE_MINUTES": 60,
+    "ALERT_REPEAT_MINUTES": 60,
+    "ALERT_BASE_URL": "",
     "SMTP_HOST": "",
     "SMTP_PORT": 465,
     "SMTP_USER": "",
     "SMTP_PASSWORD": "",
     "SMTP_FROM": "",
-    "SMTP_USE_SSL": true
+    "SMTP_USE_SSL": true,
+    "FOOTER_FILE": "footer.html",
+    "HIDE_ADMIN_ENTRY": true
   }

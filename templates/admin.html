@@ -141,6 +141,24 @@
                         </button>
                     </div>
                 </div>
+                <!-- 全局告警设置 -->
+                <div class="mb-4 p-4 bg-orange-50 dark:bg-gray-800 border border-orange-200 dark:border-gray-700 rounded-xl flex flex-wrap items-end gap-4">
+                    <div class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                        <i class="fa-solid fa-bell text-orange-500"></i>全局告警设置
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                            重复告警间隔（分钟）：首次告警后，若服务器仍离线，每隔此间隔再发一次
+                        </label>
+                        <div class="flex gap-2">
+                            <input type="number" id="repeatIntervalInput" min="1" value="60"
+                                class="w-28 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <button onclick="saveRepeatInterval()"
+                                class="px-3 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">保存</button>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 flex-1 min-w-[220px]">收件人可点击告警邮件中的链接暂时拒收该服务器的告警，服务器重新上线后自动恢复接收。</p>
+                </div>
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left">
@@ -191,6 +209,8 @@
             </section>
         </main>
     </div>
+
+    {% if footer_html %}{{ footer_html|safe }}{% endif %}
 
     <!-- ========== Toast ========== -->
     <div id="toast" class="hidden fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white z-[100] fade-in">
@@ -382,7 +402,21 @@
                 CFG_ALERT_OFFLINE_MINUTES = d.data.ALERT_OFFLINE_MINUTES || 60;
                 const hintEl = document.getElementById('globalThresholdHint');
                 if (hintEl) hintEl.textContent = CFG_ALERT_OFFLINE_MINUTES;
+                const ri = document.getElementById('repeatIntervalInput');
+                if (ri) ri.value = d.data.ALERT_REPEAT_MINUTES || 60;
             }
+        }
+
+        async function saveRepeatInterval() {
+            const v = parseInt(document.getElementById('repeatIntervalInput').value, 10);
+            if (isNaN(v) || v <= 0) { showToast('请输入大于 0 的分钟数', true); return; }
+            const d = await api('/api/admin/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ALERT_REPEAT_MINUTES: v })
+            });
+            if (d?.success) showToast(`重复告警间隔已设为 ${d.data.ALERT_REPEAT_MINUTES} 分钟`);
+            else showToast(d?.msg || '保存失败', true);
         }
 
         function renderView() {

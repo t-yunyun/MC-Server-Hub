@@ -33,6 +33,10 @@ API_LOG_FILE = CFG['API_LOG_FILE']
 CHECK_INTERVAL = CFG['CHECK_INTERVAL']
 ALERT_ENABLED = CFG.get('ALERT_ENABLED', False)
 ALERT_OFFLINE_MINUTES = CFG.get('ALERT_OFFLINE_MINUTES', 60)
+ALERT_REPEAT_MINUTES = CFG.get('ALERT_REPEAT_MINUTES', 60)
+ALERT_BASE_URL = CFG.get('ALERT_BASE_URL') or f"http://127.0.0.1:{CFG.get('PORT', 5000)}"
+FOOTER_FILE = CFG.get('FOOTER_FILE', 'footer.html')
+HIDE_ADMIN_ENTRY = CFG.get('HIDE_ADMIN_ENTRY', True)
 SMTP_HOST = CFG.get('SMTP_HOST', '')
 SMTP_PORT = CFG.get('SMTP_PORT', 465)
 SMTP_USER = CFG.get('SMTP_USER', '')
@@ -308,6 +312,7 @@ def check_alerts(data, statuses):
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     now_ts = time.time()
     dirty = False
+    data_dirty = False
 
     for s in data["servers"]:
         st = statuses.get(str(s["id"]))
@@ -317,16 +322,23 @@ def check_alerts(data, statuses):
         # 兜底旧数据
         st.setdefault("offline_since", None)
         st.setdefault("alert_sent", False)
+        st.setdefault("last_alert_ts", 0)
 
         emails = s.get("alert_emails", [])
         threshold_min = get_effective_threshold(s)
 
-        # ===== 在线分支：清空状态 =====
+        # ===== 在线分支：清空状态并解除拒收 =====
         if st.get("is_online"):
             if st.get("offline_since") is not None or st.get("alert_sent"):
                 st["offline_since"] = None
                 st["alert_sent"] = False
+                st["last_alert_ts"] = 0
                 dirty = True
+            # 服务器恢复在线：解除该服务器的拒收名单（重新开启告警）
+            sid_key = str(s["id"])
+            if data.get("muted_emails", {}).get(sid_key):
+                data["muted_emails"][sid_key] = []
+                data_dirty = True
             continue
 
         # ===== 离线分支 =====
@@ -349,19 +361,32 @@ def check_alerts(data, statuses):
 
         offline_min = (now_ts - offline_ts) / 60
 
-        if offline_min >= threshold_min and not st.get("alert_sent"):
-            if emails:
-                Thread(target=email_module.send_alert_email, args=(s, st, list(emails)),
+        # 触发条件：首次告警（达到离线阈值）或重复告警（距上次告警已过 ALERT_REPEAT_MINUTES）
+        should_alert = False
+        if not st.get("alert_sent"):
+            if offline_min >= threshold_min:
+                should_alert = True
+        else:
+            last_ts = st.get("last_alert_ts") or 0
+            if (now_ts - last_ts) / 60 >= ALERT_REPEAT_MINUTES:
+                should_alert = True
+
+        if should_alert:
+            # 过滤已拒收的收件人（名单存于 data.json 的 muted_emails）
+            muted = set(data.get("muted_emails", {}).get(str(s["id"]), []))
+            active_emails = [e for e in emails if e not in muted]
+            if active_emails:
+                Thread(target=email_module.send_alert_email,
+                       args=(s, st, list(active_emails), ALERT_BASE_URL),
                        name=f"alert-{s['id']}").start()
-                st["alert_sent"] = True
-                dirty = True
-        elif offline_min < threshold_min and st.get("alert_sent"):
-            # 容错：未超阈值却已标记，重置
-            st["alert_sent"] = False
+            st["alert_sent"] = True
+            st["last_alert_ts"] = now_ts
             dirty = True
 
     if dirty:
         save_json(STATUS_FILE, statuses)
+    if data_dirty:
+        save_json(DATA_FILE, data)
 
 
 import re
@@ -386,14 +411,62 @@ def make_content_disposition(filename: str) -> str:
 
 # ==================== 页面路由 ====================
 
+def load_footer_html():
+    """读取页尾自定义 HTML（FOOTER_FILE）。文件不存在或读取失败时返回空串，页面不渲染页尾。"""
+    try:
+        if os.path.exists(FOOTER_FILE):
+            with open(FOOTER_FILE, 'r', encoding='utf-8') as f:
+                return f.read()
+    except Exception as e:
+        print(f"⚠️ 读取页尾文件 {FOOTER_FILE} 失败: {e}")
+    return ""
+
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', footer_html=load_footer_html(),
+                           show_admin_entry=not HIDE_ADMIN_ENTRY)
 
 
 @app.route('/admin')
 def admin_page():
-    return render_template('admin.html')
+    return render_template('admin.html', footer_html=load_footer_html())
+
+
+@app.route('/verify')
+def alert_unmute():
+    """告警邮件拒收链接：暂时关闭该收件人接收此服务器告警（服务器重新上线后自动恢复）。"""
+    sid = (request.args.get('id') or '').strip()
+    email = (request.args.get('email') or '').strip().lower()
+    if not sid or not email:
+        return _verify_page(False, "链接缺少参数，无法处理。")
+    data = load_json(DATA_FILE, {"servers": [], "resources": []})
+    server = next((s for s in data["servers"] if str(s["id"]) == sid), None)
+    if not server:
+        return _verify_page(False, "服务器不存在，链接可能已失效。")
+    muted = data.setdefault("muted_emails", {})
+    lst = muted.setdefault(sid, [])
+    if email in lst:
+        return _verify_page(True, f"邮箱 {email} 已停止接收服务器「{server['name']}」的告警，无需重复操作。")
+    lst.append(email)
+    save_json(DATA_FILE, data)
+    return _verify_page(True, f"操作成功：邮箱 {email} 将不再接收服务器「{server['name']}」的离线告警。<br>该服务器重新上线后，此设置会自动解除。")
+
+
+def _verify_page(ok, msg):
+    color = "#16a34a" if ok else "#dc2626"
+    icon = "✅" if ok else "⚠️"
+    title = "设置成功" if ok else "无法处理"
+    html = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>告警订阅设置</title></head>
+<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f3f4f6;font-family:system-ui,-apple-system,sans-serif;">
+<div style="max-width:420px;width:90%;background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08);padding:40px 32px;text-align:center;">
+<div style="font-size:44px;margin-bottom:12px;">{icon}</div>
+<h1 style="font-size:20px;color:{color};margin:0 0 14px;">{title}</h1>
+<p style="color:#4b5563;line-height:1.7;margin:0 0 24px;">{msg}</p>
+<a href="/" style="display:inline-block;padding:10px 22px;background:#16a34a;color:#fff;text-decoration:none;border-radius:8px;">返回大厅</a>
+</div></body></html>"""
+    return html
 
 
 @app.route('/server/<int:sid>')
@@ -591,12 +664,33 @@ def admin_config():
         "data": {
             "ALERT_ENABLED": ALERT_ENABLED,
             "ALERT_OFFLINE_MINUTES": ALERT_OFFLINE_MINUTES,
+            "ALERT_REPEAT_MINUTES": ALERT_REPEAT_MINUTES,
             "SMTP_HOST": SMTP_HOST,
             "SMTP_PORT": SMTP_PORT,
             "SMTP_USER": SMTP_USER,
             "SMTP_USE_SSL": SMTP_USE_SSL,
         }
     })
+
+
+@app.route('/api/admin/config', methods=['POST'])
+def admin_update_config():
+    """更新全局告警配置（当前仅支持重复告警间隔 ALERT_REPEAT_MINUTES）。"""
+    if not session.get("is_admin"):
+        return jsonify({"success": False, "msg": "未授权"}), 403
+    global ALERT_REPEAT_MINUTES
+    payload = request.json or {}
+    if "ALERT_REPEAT_MINUTES" in payload:
+        v = payload["ALERT_REPEAT_MINUTES"]
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0:
+            return jsonify({"success": False, "msg": "重复告警间隔必须是大于等于 0 的数字"}), 400
+        v = int(v)
+        cfg = load_config()
+        cfg["ALERT_REPEAT_MINUTES"] = v
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as fh:
+            json.dump(cfg, fh, ensure_ascii=False, indent=2)
+        ALERT_REPEAT_MINUTES = v
+    return jsonify({"success": True, "data": {"ALERT_REPEAT_MINUTES": ALERT_REPEAT_MINUTES}})
 
 
 @app.route('/api/admin/check-now', methods=['POST'])
