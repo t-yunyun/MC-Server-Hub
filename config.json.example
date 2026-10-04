@@ -21,5 +21,5 @@
     "SMTP_FROM": "",
     "SMTP_USE_SSL": true,
     "FOOTER_FILE": "footer.html",
-    "HIDE_ADMIN_ENTRY": true
+    "HIDE_ADMIN_ENTRY": false
   }

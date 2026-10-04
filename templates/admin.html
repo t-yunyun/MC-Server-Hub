@@ -5,14 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理后台 - MC 游戏大厅</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: { extend: { colors: { mcgreen: '#5D8C47', mcdark: '#1a1a2e' } } }
-        }
-    </script>
+    <link rel="stylesheet" href="/static/css/tailwind.min.css">
+    <!-- Font Awesome：国内镜像 npmmirror，加载失败时自动回退 bootcdn -->
+    <link rel="stylesheet"
+        href="https://registry.npmmirror.com/@fortawesome/fontawesome-free/6.4.0/files/css/all.min.css"
+        onerror="this.onerror=null;this.href='https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css';">
     <link rel="stylesheet" href="/static/css/common.css">
     <style>
         /* 自定义 Checkbox 样式 */

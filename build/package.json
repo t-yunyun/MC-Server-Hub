@@ -1,0 +1,12 @@
+{
+  "name": "mc-server-hub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MC-Server-Hub 前端样式构建（仅在修改 Tailwind 类名后需要执行）",
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i tailwind.input.css -o ../static/css/tailwind.min.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

@@ -1,0 +1,7 @@
+/*
+ * Tailwind CSS 构建入口文件
+ * 构建产物：static/css/tailwind.min.css（模板实际引用的是产物，不要直接改产物）
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

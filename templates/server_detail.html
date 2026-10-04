@@ -5,13 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>服务器详情 - MC 游戏大厅</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
-    <script>window.echarts || document.write('<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"><\/script>');</script>
-    <script>
-        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { mcgreen: '#5D8C47' } } } }
-    </script>
+    <link rel="stylesheet" href="/static/css/tailwind.min.css">
+    <!-- Font Awesome：国内镜像 npmmirror，加载失败时自动回退 bootcdn -->
+    <link rel="stylesheet"
+        href="https://registry.npmmirror.com/@fortawesome/fontawesome-free/6.4.0/files/css/all.min.css"
+        onerror="this.onerror=null;this.href='https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css';">
+    <!-- ECharts：国内镜像 npmmirror，加载失败时回退 bootcdn -->
+    <script src="https://registry.npmmirror.com/echarts/5.5.0/files/dist/echarts.min.js"></script>
+    <script>window.echarts || document.write('<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.5.0/echarts.min.js"><\/script>');</script>
     <link rel="stylesheet" href="/static/css/common.css">
     <style>
         /* 详情页状态点比首页略大 */

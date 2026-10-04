@@ -8,7 +8,7 @@
 - **资源库管理**：支持上传本地文件或外部链接，一键关联至指定服务器的额外文件列表。
 - **隐私与可见性控制**：资源支持“隐藏”模式，隐藏资源仅在关联的服务器详情页可见，不在首页公开展示。
 - **现代化 UI**：基于 Tailwind CSS 构建，完美支持亮色/暗色模式切换，响应式适配移动端与桌面端。
-- ️**安全与隔离**：前后端分离设计，敏感配置（如密码、密钥）通过独立的 `config.json` 管理，支持环境变量覆盖。
+- ️**安全与隔离**：前后端分离设计，敏感配置（如密码、密钥）通过独立的 `config.json` 管理，该文件已被版本控制忽略。
 - **国际化文件名下载兼容**：资源下载接口遵循 RFC 5987 标准，自动处理中文等非 ASCII 文件名。现代浏览器优先使用 UTF-8 编码的原始文件名，旧客户端或终端自动回退至 `unnamed.<后缀>` 语义化命名，彻底避免乱码与空文件名问题。
 
 ## ️ 技术栈
@@ -26,37 +26,82 @@
 
 ### 2. 配置
 
-| 配置项              | 类型      | 默认值                         | 说明                                                                     |
-|:---------------- |:------- |:--------------------------- |:---------------------------------------------------------------------- |
-| `HOST` | String | `0.0.0.0` | 服务监听的主机地址。`0.0.0.0` 表示允许所有外部 IP 访问，本地调试可改为 `127.0.0.1`。 |
-| `PORT` | Integer | `5000` | 服务监听的端口号。若端口被占用或需修改，请在此处更改。 |
-| `SECRET_KEY`     | String  | `MC-Server-Hub-key-2026`    | Flask 会话加密密钥，用于管理员登录状态保持。**部署前请务必修改为随机字符串**。                           |
-| `ADMIN_PASSWORD` | String  | `admin123`                  | 后台管理员登录密码。**部署前请务必修改**。                                                |
-| `MAX_HISTORY`    | Integer | `120`                       | 服务器详情页状态图表保留的历史记录条数（按巡检间隔计算，120条约等于近2小时数据）。                            |
-| `MAX_API_LOGS`   | Integer | `50`                        | 服务器状态 API 请求日志的最大保留条数，超出后自动清理旧记录。                                      |
-| `CHECK_INTERVAL` | Integer | `60`                        | 后台自动巡检服务器的间隔时间（单位：秒）。不建议设置过低，以免被状态查询 API 限流。                           |
-| `DATA_FILE`      | String  | `./data/data.json`          | 核心业务数据文件路径，存储服务器列表、资源列表及关联关系。                                          |
-| `STATUS_FILE`    | String  | `./data/Server_status.json` | 服务器实时状态缓存文件，存储在线人数、延迟、MOTD 等巡检结果。                                      |
-| `API_LOG_FILE`   | String  | `./data/api_response.json`  | API 请求日志存储文件，用于排查巡检失败问题。                                               |
-| `UPLOAD_DIR`     | String  | `uploads`                   | 文件上传根目录。整合包将存储于 `{UPLOAD_DIR}/packs`，资源文件存储于 `{UPLOAD_DIR}/resources`。 |
-| `ALERT_ENABLED` | Boolean | `false` | 是否启用离线告警邮件功能。设为 `false` 时，巡检不会发送任何告警邮件，仅记录状态。 |
-| `ALERT_OFFLINE_MINUTES` | Integer | `60` | 服务器离线多久后触发告警邮件（单位：分钟）。服务器级 `alert_offline_minutes` 字段可覆盖此全局值。 |
-| `ALERT_REPEAT_MINUTES` | Integer | `60` | 重复告警间隔（单位：分钟）。首次告警后若服务器持续离线，每隔此间隔会再次发送告警。可在管理后台「全局告警设置」中修改，保存后立即生效并写入此文件。 |
-| `ALERT_BASE_URL` | String | 空 | 面板对外访问的基础地址（如 `http://your-domain:5001`），用于拼接告警邮件中的拒收链接 `/verify?id=&email=`。留空时自动使用 `http://127.0.0.1:{PORT}`。公网部署时请配置为外部可访问地址。 |
-| `SMTP_HOST` | String | 空 | SMTP 服务器地址。常见：QQ 邮箱 `smtp.qq.com`、网易 `smtp.163.com`、Gmail `smtp.gmail.com`。 |
-| `SMTP_PORT` | Integer | `465` | SMTP 服务器端口。SSL 直连通常为 `465`，STARTTLS 通常为 `587`，需与 `SMTP_USE_SSL` 配套使用。 |
-| `SMTP_USER` | String | 空 | SMTP 登录账号（即发件邮箱地址），同时默认作为告警邮件的收件人之一。 |
-| `SMTP_PASSWORD` | String | 空 | SMTP 登录授权码（**不是邮箱登录密码**）。QQ/网易等邮箱需在设置中开启 SMTP 服务并生成授权码。**部署前请务必修改**。 |
-| `SMTP_FROM` | String | 空 | 实际显示的发件人地址。留空时默认使用 `SMTP_USER`。 |
-| `SMTP_USE_SSL` | Boolean | `true` | 是否使用 SSL 直连。`true` 走 `SMTP_SSL`（建议端口 `465`），`false` 走 `SMTP` + `STARTTLS`（建议端口 `587`）。 |
-| `FOOTER_FILE` | String | `footer.html` | 自定义页尾 HTML 文件路径（相对项目根目录）。文件存在时内容会注入大厅首页与管理后台底部；文件不存在则不渲染页尾，无需改代码。 |
-| `HIDE_ADMIN_ENTRY` | Boolean | `true` | 是否隐藏大厅首页导航栏的「管理员入口」按钮。`true` 时未登录访客看不到入口（仍可直接访问 `/admin` 登录）；已登录管理员始终显示「管理后台」按钮。 |
+> **请复制 `config.json.example` 并设置配置文件**，重命名为 `config.json` 后按需修改。
+
+全部配置项的类型、默认值、是否必填及部署前检查清单，见 **[CONFIG.md](CONFIG.md)**。
+
+部署前请务必修改 `SECRET_KEY` 与 `ADMIN_PASSWORD`。
+
+### 3. 启动
+
+```bash
+pip install -r requirements.txt
+python app.py
+```
+
+启动后访问 `http://127.0.0.1:5000`（端口由 `PORT` 配置）。
+
+---
+
+## 其他注意事项
+
+以下内容与日常启动运行无关，仅在修改前端样式或部署到国内网络环境时需要关注。
+
+### 1.本地 Tailwind 构建
+
+项目不再引用 `https://cdn.tailwindcss.com`，改为加载预构建的本地样式文件 `static/css/tailwind.min.css`（约 22 KB，仅包含模板实际用到的类）。
+
+**普通部署无需执行构建**，仓库内的 `tailwind.min.css` 已是最新产物，直接 `python app.py` 启动即可，页面不依赖任何 Tailwind 外网资源。
+
+只有在**修改了模板/JS 里的 Tailwind 类名**，或调整了主题配置时，才需要重新构建。构建仅用于开发阶段，运行环境不需要 Node.js。所有构建相关文件集中在 `build/` 目录，不污染项目根目录。
+
+```bash
+# 首次构建前安装依赖（需要 Node.js 18+），在 build/ 目录内执行
+cd build
+npm install
+
+# 重新生成 static/css/tailwind.min.css（同样在 build/ 目录内执行）
+npm run build:css
+```
+
+构建配置与产物均以 `build/tailwind.config.js` 中的 `__dirname` 锚定到项目根，因此从项目根目录直接调用构建器同样可行：
+
+```bash
+node build/node_modules/tailwindcss/lib/cli.js -c build/tailwind.config.js -i build/tailwind.input.css -o static/css/tailwind.min.css --minify
+```
+
+相关文件说明：
+
+| 文件                            | 作用                                                                                      |
+|:----------------------------- |:--------------------------------------------------------------------------------------- |
+| `build/package.json`          | 构建依赖与 `build:css` 脚本                                                                    |
+| `build/tailwind.config.js`    | 构建配置，`darkMode: 'class'` 与 `mcgreen` / `mcdark` 自定义色与页面内联样式保持一致；扫描路径以 `__dirname` 锚定项目根 |
+| `build/tailwind.input.css`    | 构建入口，仅包含三条 `@tailwind` 指令                                                               |
+| `static/css/tailwind.min.css` | 构建产物，模板实际引用此文件（属运行时资源，故留在 `static/`，请勿手动编辑）                                             |
+
+构建器会扫描 `templates/**/*.html` 与 `static/js/**/*.js` 提取类名。注意：JS 中以字符串字面量形式出现的类名（含模板字符串三元表达式）可被正确识别，但**运行时用变量拼接的类名无法被扫描到**，若新增此类写法，需将其加入 `build/tailwind.config.js` 的 `safelist`。
+
+### 2.外部静态资源镜像
+
+项目仍有两类资源走公网 CDN，均已切换为国内镜像：
+
+| 资源                 | 主源                       | 回退源               | 使用页面   |
+|:------------------ |:------------------------ |:----------------- |:------ |
+| Font Awesome 6.4.0 | `registry.npmmirror.com` | `cdn.bootcdn.net` | 全部三个页面 |
+| ECharts 5.5.0      | `registry.npmmirror.com` | `cdn.bootcdn.net` | 服务器详情页 |
+
+回退机制：
+
+- Font Awesome 用 `<link onerror>` 切换 `href`，样式表加载失败时自动改用备用源。
+- ECharts 沿用原有的 `window.echarts || document.write(...)` 检测，脚本未成功加载时写入备用源。
+
+若希望完全脱离公网（内网部署，或镜像整体不可用时），可将这两个资源下载到 `static/` 目录并改为本地路径
 
 ---
 
 # MC 服务器状态查询 API 使用说明
 
-本项目使用 [MineBBS MC 服务器状态查询 API](https://motd.minebbs.com/docs) 来获取 Minecraft 服务器的实时状态信息。该 API 为广大 Minecraft 服主提供免费、快捷的服务器状态查询工具，支持 Java 版和基岩版。
+本项目使用 [MineBBS MC 服务器状态查询 API](https://motd.minebbs.com/docs) 来获取 Minecraft 服务器的实时状态信息。该 API 为广大 Minecraft 服主提供免费、快捷的服务器状态查询工具，支持 Java 版和基岩版。
 
 ## 项目中的调用方式
 
