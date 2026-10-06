@@ -209,6 +209,39 @@
 
     {% if footer_html %}{{ footer_html|safe }}{% endif %}
 
+    <!-- ========== 上传方式选择弹窗 ========== -->
+    <div id="sourceChooseModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-lg fade-in">
+            <h3 id="chooseTitle" class="text-xl font-bold mb-4 dark:text-white">上传整合包</h3>
+            <div class="space-y-3">
+                <button type="button" onclick="chooseSourceLocal()"
+                    class="w-full p-4 border rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600 transition">
+                    <div class="font-medium text-gray-800 dark:text-gray-200"><i
+                            class="fa-solid fa-file-arrow-up mr-2 text-purple-500"></i>上传本地文件</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">从本机选择文件上传到服务器存储目录</div>
+                </button>
+                <button type="button" onclick="chooseSourceLink()"
+                    class="w-full p-4 border rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600 transition">
+                    <div class="font-medium text-gray-800 dark:text-gray-200"><i
+                            class="fa-solid fa-link mr-2 text-purple-500"></i>提供下载链接</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">用户点击后跳转到外部链接下载，无需上传文件</div>
+                </button>
+            </div>
+            <div id="chooseLinkBox" class="hidden mt-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">下载链接（http/https）</label>
+                <input type="url" id="chooseLinkInput" placeholder="https://example.com/pack.zip"
+                    class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                <div class="flex justify-end gap-2 mt-3">
+                    <button type="button" onclick="closeChooseSource()"
+                        class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">取消</button>
+                    <button type="button" onclick="submitChooseLink()"
+                        class="px-4 py-2 text-sm bg-purple-600 text-white rounded hover:bg-purple-700">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ========== Toast ========== -->
     <div id="toast" class="hidden fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white z-[100] fade-in">
     </div>
@@ -480,7 +513,7 @@
                         <td class="p-4"><span class="status-dot ${dotCls} mr-2"></span>${statusText}${alertBadgeHtml}</td>
                         <td class="p-4 text-right space-x-2 whitespace-nowrap">
                         <button onclick="editServer(${s.id})" class="text-blue-500 hover:text-blue-700 text-sm"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="triggerPackUpload(${s.id})" class="text-purple-500 hover:text-purple-700 text-sm" title="上传整合包"><i class="fa-solid fa-upload"></i></button>
+                        <button onclick="openChooseSource('pack',${s.id})" class="text-purple-500 hover:text-purple-700 text-sm" title="上传整合包/外链"><i class="fa-solid fa-upload"></i></button>
                         <button onclick="deleteServer(${s.id},'${esc(s.name)}')" class="text-red-500 hover:text-red-700 text-sm"><i class="fa-solid fa-trash"></i></button>
                         <input type="file" id="packInput_${s.id}" class="hidden" onchange="uploadPack(${s.id},this)">
                         </td>
@@ -573,7 +606,37 @@
         }
 
         async function deleteServer(id, name) { if (!confirm(`确定删除「${name}」？`)) return; const d = await api(`/api/admin/servers/${id}`, { method: 'DELETE' }); if (d?.success) { showToast('已删除'); loadAdminData(); } else showToast('删除失败', true); }
-        function triggerPackUpload(sid) { document.getElementById('packInput_' + sid).click(); }
+        let chooseCtx = null;
+        function openChooseSource(kind, id) {
+            chooseCtx = { kind: kind, id: id };
+            document.getElementById('chooseTitle').textContent = kind === 'pack' ? '上传整合包' : '上传/替换文件或外链';
+            document.getElementById('chooseLinkBox').classList.add('hidden');
+            document.getElementById('chooseLinkInput').value = '';
+            document.getElementById('sourceChooseModal').classList.remove('hidden');
+        }
+        function closeChooseSource() { document.getElementById('sourceChooseModal').classList.add('hidden'); chooseCtx = null; }
+        function chooseSourceLocal() {
+            if (!chooseCtx) return;
+            const ctx = chooseCtx; closeChooseSource();
+            document.getElementById((ctx.kind === 'pack' ? 'packInput_' : 'resInput_') + ctx.id).click();
+        }
+        function chooseSourceLink() {
+            document.getElementById('chooseLinkBox').classList.remove('hidden');
+            document.getElementById('chooseLinkInput').focus();
+        }
+        async function submitChooseLink() {
+            if (!chooseCtx) return;
+            const link = document.getElementById('chooseLinkInput').value.trim();
+            if (!link) { showToast('请输入链接', true); return; }
+            const url = chooseCtx.kind === 'pack'
+                ? `/api/admin/servers/${chooseCtx.id}/set-pack-link`
+                : `/api/admin/resources/${chooseCtx.id}/set-link`;
+            let d = null;
+            try { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link }) }); d = await r.json(); } catch (e) { d = null; }
+            if (d && d.success) { showToast('外链已设置'); closeChooseSource(); loadAdminData(); }
+            else showToast((d && d.msg) || '设置失败', true);
+        }
+
         async function uploadPack(sid, input) { const f = input.files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); showToast('上传中...'); try { const r = await fetch(`/api/admin/servers/${sid}/upload-pack`, { method: 'POST', body: fd }); const d = await r.json(); if (d.success) { showToast('整合包上传成功'); loadAdminData(); } else showToast(d.msg || '上传失败', true); } catch (e) { showToast('上传失败', true); } input.value = ''; }
         async function manualCheck() { const d = await api('/api/admin/check-now', { method: 'POST' }); if (d?.success) { showToast('已触发巡检'); setTimeout(loadAdminData, 3000); } else showToast(d?.msg || '触发失败', true); } async function sendTestEmail() {
             const d = await api('/api/admin/test-email', { method: 'POST' });
@@ -602,7 +665,7 @@
             <td class="p-4">${sourceHtml}</td>
             <td class="p-4">${hiddenToggle}</td>
             <td class="p-4 text-right space-x-2 whitespace-nowrap">
-                <button onclick="triggerResUpload(${r.id})" class="text-purple-500 hover:text-purple-700 text-sm" title="上传/替换文件"><i class="fa-solid fa-upload"></i></button>
+                <button onclick="openChooseSource('res',${r.id})" class="text-purple-500 hover:text-purple-700 text-sm" title="上传/替换文件或外链"><i class="fa-solid fa-upload"></i></button>
                 <button onclick="deleteResource(${r.id},'${esc(r.name)}')" class="text-red-500 hover:text-red-700 text-sm"><i class="fa-solid fa-trash"></i></button>
                 <input type="file" id="resInput_${r.id}" class="hidden" onchange="uploadResFile(${r.id},this)">
             </td></tr>`;
@@ -671,7 +734,7 @@
             } catch (err) { showToast('上传失败', true); }
         }
 
-        function triggerResUpload(rid) { document.getElementById('resInput_' + rid).click(); }
+
         async function uploadResFile(rid, input) { const f = input.files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); showToast('上传中...'); try { const r = await fetch(`/api/admin/resources/${rid}/upload-file`, { method: 'POST', body: fd }); const d = await r.json(); if (d.success) { showToast('文件已更新'); loadAdminData(); } else showToast(d.msg || '上传失败', true); } catch (e) { showToast('上传失败', true); } input.value = ''; }
         async function deleteResource(id, name) { if (!confirm(`确定删除「${name}」？\n(同时会从所有服务器的额外文件中移除)`)) return; const d = await api(`/api/admin/resources/${id}`, { method: 'DELETE' }); if (d?.success) { showToast('已删除'); loadAdminData(); } else showToast('删除失败', true); }
 

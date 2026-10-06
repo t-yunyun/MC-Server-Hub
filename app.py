@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, send_file, make_response
+from flask import Flask, render_template, request, jsonify, session, send_file, make_response, redirect
 import requests
 import json
 import os
@@ -409,6 +409,11 @@ def make_content_disposition(filename: str) -> str:
     return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded_name}'
 
 
+def is_download_link(u):
+    """校验外部下载链接：仅允许 http/https。"""
+    return isinstance(u, str) and (u.startswith('https://') or u.startswith('http://'))
+
+
 # ==================== 页面路由 ====================
 
 def load_footer_html():
@@ -494,7 +499,7 @@ def get_servers():
             s_data["players_max"] = 0
             s_data["motd"] = ""
         s_data.pop("status_history", None)
-        s_data["has_pack"] = bool(s.get("pack_filename"))
+        s_data["has_pack"] = bool(s.get("pack_filename") or s.get("pack_link"))
         result.append(s_data)
     return jsonify(result)
 
@@ -565,7 +570,7 @@ def get_server_detail(sid):
             extra_files_list.append(r)
             
     server["extra_files_list"] = extra_files_list
-    server["has_pack"] = bool(server.get("pack_filename"))
+    server["has_pack"] = bool(server.get("pack_filename") or server.get("pack_link"))
     return jsonify({"success": True, "data": server})
 
 @app.route('/api/server/<int:sid>/metrics')
@@ -600,6 +605,8 @@ def get_server_metrics(sid):
 def download_pack(sid):
     data = load_json(DATA_FILE, {"servers": [], "resources": []})
     for s in data["servers"]:
+        if s["id"] == sid and s.get("pack_link"):
+            return redirect(s["pack_link"])
         if s["id"] == sid and s.get("pack_filename"):
             filepath = os.path.join(PACKS_DIR, s["pack_filename"])
             if not os.path.exists(filepath):
@@ -618,6 +625,8 @@ def download_pack(sid):
 def download_resource_file(rid):
     data = load_json(DATA_FILE, {"servers": [], "resources": []})
     for r in data["resources"]:
+        if r["id"] == rid and r.get("link"):
+            return redirect(r["link"])
         if r["id"] == rid and r.get("file_path"):
             filepath = os.path.join(RESOURCES_DIR, r["file_path"])
             if not os.path.exists(filepath):
@@ -735,9 +744,13 @@ def update_server(sid):
                 # ✅ 确保保存的是数组
                 ef = update_data["extra_files"]
                 data["servers"][i]["extra_files"] = ef if isinstance(ef, list) else []
-            for key in ["name", "ip", "port", "version", "key", "description"]:
+            for key in ["name", "ip", "port", "version", "key", "description", "pack_link"]:
                 if key in update_data:
                     data["servers"][i][key] = update_data[key]
+            if "pack_link" in update_data:
+                pl = data["servers"][i].get("pack_link") or ""
+                if pl and not is_download_link(pl):
+                    return jsonify({"success": False, "msg": "整合包链接必须为 http(s) 地址"}), 400
             # 告警配置：收件邮箱数组 + 每服务器离线阈值（分钟，null 表示用全局）
             if "alert_emails" in update_data:
                 emails = update_data["alert_emails"]
@@ -769,6 +782,31 @@ def delete_server(sid):
         del statuses[str(sid)]
         save_json(STATUS_FILE, statuses)
     return jsonify({"success": True})
+
+
+@app.route('/api/admin/servers/<int:sid>/set-pack-link', methods=['POST'])
+def set_pack_link(sid):
+    """设置/清空服务器整合包外部下载链接；设置外链时清除本地整合包文件记录。"""
+    if not session.get("is_admin"):
+        return jsonify({"success": False, "msg": "未授权"}), 403
+    link = (request.json.get("link") or "").strip()
+    if link and not is_download_link(link):
+        return jsonify({"success": False, "msg": "链接必须为 http(s) 地址"}), 400
+    data = load_json(DATA_FILE, {"servers": [], "resources": []})
+    for i, s in enumerate(data["servers"]):
+        if s["id"] == sid:
+            if link:
+                # 清掉旧本地整合包文件
+                if s.get("pack_filename"):
+                    old_path = os.path.join(PACKS_DIR, s["pack_filename"])
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+                data["servers"][i]["pack_filename"] = ""
+                data["servers"][i]["pack_original_filename"] = ""
+            data["servers"][i]["pack_link"] = link
+            save_json(DATA_FILE, data)
+            return jsonify({"success": True})
+    return jsonify({"success": False, "msg": "服务器不存在"}), 404
 
 
 @app.route('/api/admin/servers/<int:sid>/upload-pack', methods=['POST'])
@@ -808,6 +846,7 @@ def upload_pack(sid):
         if s["id"] == sid:
             data["servers"][i]["pack_filename"] = safe_name
             data["servers"][i]["pack_original_filename"] = original_name
+            data["servers"][i]["pack_link"] = ""
             save_json(DATA_FILE, data)
             return jsonify({"success": True, "filename": safe_name})
     return jsonify({"success": False, "msg": "服务器不存在"}), 404
@@ -961,6 +1000,29 @@ def delete_resource(rid):
     return jsonify({"success": True})
 
 
+@app.route('/api/admin/resources/<int:rid>/set-link', methods=['POST'])
+def set_resource_link(rid):
+    """设置/清空资源外部下载链接；设置外链时删除本地文件记录。"""
+    if not session.get("is_admin"):
+        return jsonify({"success": False, "msg": "未授权"}), 403
+    link = (request.json.get("link") or "").strip()
+    if link and not is_download_link(link):
+        return jsonify({"success": False, "msg": "链接必须为 http(s) 地址"}), 400
+    data = load_json(DATA_FILE, {"servers": [], "resources": []})
+    for i, r in enumerate(data["resources"]):
+        if r["id"] == rid:
+            if link and r.get("file_path"):
+                old_path = os.path.join(RESOURCES_DIR, r["file_path"])
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+                data["resources"][i]["file_path"] = ""
+                data["resources"][i]["original_filename"] = ""
+            data["resources"][i]["link"] = link
+            save_json(DATA_FILE, data)
+            return jsonify({"success": True})
+    return jsonify({"success": False, "msg": "资源不存在"}), 404
+
+
 @app.route('/api/admin/resources/<int:rid>/upload-file', methods=['POST'])
 def upload_resource_file(rid):
     if not session.get("is_admin"):
@@ -998,6 +1060,7 @@ def upload_resource_file(rid):
         if r["id"] == rid:
             data["resources"][i]["file_path"] = safe_name
             data["resources"][i]["original_filename"] = original_name
+            data["resources"][i]["link"] = ""
             save_json(DATA_FILE, data)
             return jsonify({"success": True, "filename": safe_name})
     return jsonify({"success": False, "msg": "资源不存在"}), 404

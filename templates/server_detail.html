@@ -199,7 +199,7 @@
                 copyText(host);
             };
 
-            if (s.has_pack) { const btn = document.getElementById('downloadPackBtn'); btn.href = `/api/download/pack/${s.id}`; btn.classList.remove('hidden'); }
+            if (s.has_pack) { const btn = document.getElementById('downloadPackBtn'); if (s.pack_link) { btn.href = s.pack_link; btn.setAttribute('target', '_blank'); btn.setAttribute('rel', 'noopener'); } else { btn.href = `/api/download/pack/${s.id}`; btn.removeAttribute('target'); btn.removeAttribute('rel'); } btn.classList.remove('hidden'); }
             if (s.motd) { document.getElementById('motdBox').classList.remove('hidden'); document.getElementById('motdText').textContent = s.motd; }
             if (s.description) { document.getElementById('descBox').classList.remove('hidden'); document.getElementById('descText').textContent = s.description; }
             if (s.players_sample && s.players_sample.length) { document.getElementById('sampleBox').classList.remove('hidden'); document.getElementById('sampleList').innerHTML = [...s.players_sample].sort().map(p => `<span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">${esc(p)}</span>`).join(''); }

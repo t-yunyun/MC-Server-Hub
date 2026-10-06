@@ -121,7 +121,7 @@
             </div>
             <div class="flex gap-2" onclick="event.stopPropagation()">
 <button onclick="copyText('${esc(s.ip)}:${s.port || 25565}')" class="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition"><i class="fa-regular fa-copy mr-1"></i>复制IP</button>
-                ${s.has_pack ? `<a href="/api/download/pack/${s.id}" class="flex-1 px-3 py-2 bg-mcgreen text-white rounded-lg text-sm text-center hover:bg-green-700 transition"><i class="fa-solid fa-download mr-1"></i>整合包</a>` : ''}
+                ${(s.has_pack || s.pack_link) ? `<a href="${s.pack_link ? esc(s.pack_link) : `/api/download/pack/${s.id}`}"${s.pack_link ? ' target="_blank" rel="noopener"' : ''} class="flex-1 px-3 py-2 bg-mcgreen text-white rounded-lg text-sm text-center hover:bg-green-700 transition"><i class="fa-solid ${s.pack_link ? 'fa-arrow-up-right-from-square' : 'fa-download'} mr-1"></i>整合包</a>` : ''}
             </div></div>`;
             }).join('');
         }
