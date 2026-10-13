@@ -54,3 +54,22 @@
 .status-offline {
     background: #ef4444;
 }
+
+/* 简介文本中的可点击链接（蓝色高亮） */
+.desc-link {
+    color: #2563eb;
+    text-decoration: underline;
+    word-break: break-all;
+}
+
+.desc-link:hover {
+    color: #1d4ed8;
+}
+
+.dark .desc-link {
+    color: #60a5fa;
+}
+
+.dark .desc-link:hover {
+    color: #93c5fd;
+}

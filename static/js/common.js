@@ -47,6 +47,18 @@ function copyText(text) {
 
 function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
+// 将文本中的 http(s) 网址转为可点击链接；先整体转义，仅对 URL 片段生成 <a>，避免注入
+function linkify(text) {
+    const safe = esc(text);
+    return safe.replace(/https?:\/\/[^\s<>"']+/g, function (m) {
+        // 去掉结尾的常见标点，避免把句号/逗号等吞进链接
+        const cleaned = m.replace(/[),.;:!?，。；：！]+$/, '');
+        const tail = m.slice(cleaned.length);
+        const href = cleaned.replace(/&amp;/g, '&');
+        return `<a href="${href}" target="_blank" rel="noopener" class="desc-link">${cleaned}</a>${tail}`;
+    });
+}
+
 // 主题初始化（跟随本地设置或系统偏好）
 if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark');
